@@ -31,6 +31,7 @@ struct handle_packer{
         --(*this->ref_count);   
         if(*this->ref_count==0) 
         {
+            std::cout<<"####################################"<<pack_handle.address()<<" has destroy####################################"<<std::endl;
             delete this->ref_count;
             this->ref_count = nullptr;
             pack_handle.destroy();
@@ -72,6 +73,7 @@ class coroutine_packer;
 template<typename ...T>
 class coroutine_states{
     public:
+    using co_packer_com_type = void;
     struct promise_type;
     using value_type = std::tuple<T...>;
     using packer_type = coroutine_packer<coroutine_states<T...>>;
@@ -84,9 +86,11 @@ class coroutine_states{
         }
 
         awaiter_stop initial_suspend(){
+            this->result_ready = false;
             return {};
         }
         awaiter_stop final_suspend()noexcept{
+            this->result_ready = false;
             return {};
         }
         awaiter_stop yield_value(value_type value){
@@ -101,16 +105,12 @@ class coroutine_states{
         awaiter_assister await_transform(awaiter_assister awaiter){
             return awaiter;
         }
-        awaiter_stop await_suspend(){
-            this->result_ready = false;
-            return {};
-        }
         void return_void(){
 
         }
         ~promise_type(){}
 
-        promise_type():result_ready(true){}
+        promise_type():result_ready(false){}
 
         auto handle_addr(){
             return std::coroutine_handle<promise_type>::from_promise(*this).address();
@@ -177,6 +177,7 @@ class coroutine_states{
 template<>
 class coroutine_states<void>{
     public:
+    using co_packer_com_type = void;
     struct promise_type;
     using value_type = void;
     using packer_type = coroutine_packer<coroutine_states<void>>;
@@ -192,6 +193,7 @@ class coroutine_states<void>{
             return {};
         }
         awaiter_stop final_suspend()noexcept{
+            this->result_ready = false;
             return {};
         }
         // template<typename T>
@@ -214,7 +216,7 @@ class coroutine_states<void>{
         }
         ~promise_type(){}
 
-        promise_type():result_ready(true){}
+        promise_type():result_ready(false){}
 
         auto handle_addr(){
             return std::coroutine_handle<promise_type>::from_promise(*this).address();
@@ -281,28 +283,33 @@ class coroutine_states<void>{
 template<typename CoroutineType>
 class coroutine_packer{
     public:
+    using co_packer_com_type = void;
     using value_type = CoroutineType::value_type;
     using co_base_t = CoroutineType;
     using co_base_handle_t = typename CoroutineType::handle_type;
     using value_list_t = std::list<value_type>;
 
-    coroutine_packer(co_base_t&& coro_base):
-    co_state_ptr(new CoroutineType(std::forward<co_base_t>(coro_base))){
+    coroutine_packer(co_base_t&& coro_base, priority_t pri = 0):
+    co_state_ptr(new CoroutineType(std::forward<co_base_t>(coro_base))),
+    priority(pri){
         this->check_and_push_result();
     }
-    coroutine_packer(const co_base_t& coro_base):
-    co_state_ptr(new CoroutineType(coro_base)){
+    coroutine_packer(const co_base_t& coro_base, priority_t pri = 0):
+    co_state_ptr(new CoroutineType(coro_base)),
+    priority(pri){
         this->check_and_push_result();
     }
 
     coroutine_packer(coroutine_packer&& co):
     co_state_ptr(co.co_state_ptr),
-    result_list(co.result_list){
+    result_list(co.result_list),
+    priority(co.priority){
         this->check_and_push_result();
     }
     coroutine_packer(const coroutine_packer& co):
     co_state_ptr(co.co_state_ptr),
-    result_list(co.result_list){
+    result_list(co.result_list),
+    priority(co.priority){
         this->check_and_push_result();
     }
 
@@ -347,6 +354,10 @@ class coroutine_packer{
         return this->co_state_ptr->get_id();
     }
 
+    const auto get_priority(){
+        return this->priority;
+    }
+
     value_list_t get_value_list(){
         return this->result_list;
     }
@@ -358,26 +369,34 @@ class coroutine_packer{
     private:
     std::shared_ptr<CoroutineType> co_state_ptr;
     value_list_t result_list;
+    priority_t priority;
 };
+
+using void_co_t = coroutine_states<void>;
 
 template<>
 class coroutine_packer<coroutine_states<void>>{
     public:
+    using co_packer_com_type = void;
     using co_base_t = coroutine_states<void>;
     using co_base_handle_t = typename coroutine_states<void>::handle_type;
 
-    coroutine_packer(co_base_t&& coro_base):
-    co_state_ptr(new coroutine_states<void>(std::forward<co_base_t>(coro_base)))
+    coroutine_packer(co_base_t&& coro_base, priority_t pri = 0):
+    co_state_ptr(new coroutine_states<void>(std::forward<co_base_t>(coro_base))),
+    priority(pri)
     {}
-    coroutine_packer(const co_base_t& coro_base):
-    co_state_ptr(new coroutine_states<void>(coro_base))
+    coroutine_packer(const co_base_t& coro_base, priority_t pri = 0):
+    co_state_ptr(new coroutine_states<void>(coro_base)),
+    priority(pri)
     {}
 
     coroutine_packer(coroutine_packer&& co):
-    co_state_ptr(co.co_state_ptr)
+    co_state_ptr(co.co_state_ptr),
+    priority(co.priority)
     {}
     coroutine_packer(const coroutine_packer& co):
-    co_state_ptr(co.co_state_ptr)
+    co_state_ptr(co.co_state_ptr),
+    priority(co.priority)
     {}
 
     void operator=(coroutine_packer&& co){
@@ -411,7 +430,12 @@ class coroutine_packer<coroutine_states<void>>{
         return this->co_state_ptr->get_id();
     }
 
+    const auto get_priority(){
+        return this->priority;
+    }
+
     virtual ~coroutine_packer(){}
     private:
     std::shared_ptr<coroutine_states<void>> co_state_ptr;
+    priority_t priority;
 };
