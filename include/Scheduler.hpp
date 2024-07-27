@@ -185,7 +185,7 @@ class Scheduler<CoroutineType, scheduler_mode::PriorityScheduling, memmory_mode:
         auto id = packer.get_id();
         this->priority_set.insert(priority);
         this->pri_packerlist_map[priority].push_back(packer);
-        this->co_map[id] = (--this->pri_packerlist_map[priority].end());
+        this->co_map[id] = (--(this->pri_packerlist_map[priority].end()));
     }
 
     void step(){
@@ -202,7 +202,7 @@ class Scheduler<CoroutineType, scheduler_mode::PriorityScheduling, memmory_mode:
                     }
                     else{
                         this->finished_list.push_back(*packerlist_it);
-                        this->co_map[packerlist_it->get_id()] = (--this->finished_list.end());
+                        this->co_map[packerlist_it->get_id()] = (--(this->finished_list.end()));
                         current_packerlist.erase(packerlist_it);
                     }
                 }

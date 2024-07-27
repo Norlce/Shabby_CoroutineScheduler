@@ -1,20 +1,15 @@
 CC = g++
 CXX_FLAGS = -fcoroutines -std=c++23 -O3
-HEADERS = assistance.hpp awaiters.hpp coroutine_base.hpp Scheduler.hpp
+INCLUDE_PATH = -I./include/
+HEADERS = ./include/assistance.hpp ./include/awaiters.hpp ./include/coroutine_base.hpp ./include/Scheduler.hpp
 
-all: test_main test
+all: test_main run
 
 test_main: test_main.cpp $(HEADERS)
-	g++ $@.cpp -o $@.exe $(CXX_FLAGS)
+	g++ $@.cpp -o $@.exe $(CXX_FLAGS) $(INCLUDE_PATH)
 
-test: test.cpp
-	g++ $^ -o $@.exe $(CXX_FLAGS)
-
-run:
+run: test_main.exe
 	./$^
-
-run_test: test.exe
-	@powershell ./$^
 
 clean:
 	@powershell rm ./*.exe

@@ -31,7 +31,6 @@ struct handle_packer{
         --(*this->ref_count);   
         if(*this->ref_count==0) 
         {
-            std::cout<<"####################################"<<pack_handle.address()<<" has destroy####################################"<<std::endl;
             delete this->ref_count;
             this->ref_count = nullptr;
             pack_handle.destroy();
@@ -289,12 +288,12 @@ class coroutine_packer{
     using co_base_handle_t = typename CoroutineType::handle_type;
     using value_list_t = std::list<value_type>;
 
-    coroutine_packer(co_base_t&& coro_base, priority_t pri = 0):
+    coroutine_packer(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new CoroutineType(std::forward<co_base_t>(coro_base))),
     priority(pri){
         this->check_and_push_result();
     }
-    coroutine_packer(const co_base_t& coro_base, priority_t pri = 0):
+    coroutine_packer(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new CoroutineType(coro_base)),
     priority(pri){
         this->check_and_push_result();
@@ -381,11 +380,11 @@ class coroutine_packer<coroutine_states<void>>{
     using co_base_t = coroutine_states<void>;
     using co_base_handle_t = typename coroutine_states<void>::handle_type;
 
-    coroutine_packer(co_base_t&& coro_base, priority_t pri = 0):
+    coroutine_packer(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new coroutine_states<void>(std::forward<co_base_t>(coro_base))),
     priority(pri)
     {}
-    coroutine_packer(const co_base_t& coro_base, priority_t pri = 0):
+    coroutine_packer(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new coroutine_states<void>(coro_base)),
     priority(pri)
     {}
