@@ -31,7 +31,6 @@ struct handle_packer{
         --(*this->ref_count);   
         if(*this->ref_count==0) 
         {
-            std::cout<<"####################################"<<pack_handle.address()<<" has destroy####################################"<<std::endl;
             delete this->ref_count;
             this->ref_count = nullptr;
             pack_handle.destroy();
