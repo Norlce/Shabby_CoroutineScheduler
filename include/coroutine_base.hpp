@@ -4,6 +4,7 @@
 #include<format>
 #include<memory>
 #include<list>
+#include"concepts.hpp"
 #include"assistance.hpp"
 #include"awaiters.hpp"
 
@@ -20,7 +21,7 @@ struct handle_packer{
     handle_packer(const handle_packer& h_p):pack_handle(h_p.pack_handle),ref_count(h_p.ref_count){
         ++(*this->ref_count);
     }
-    handle_packer(handle_packer&& h_p):pack_handle(h_p.pack_handle),ref_count(h_p.ref_count){
+    handle_packer(handle_packer&& h_p):pack_handle(std::move(h_p.pack_handle)),ref_count(h_p.ref_count){
         ++(*this->ref_count);
     }
     void operator=(const handle_packer& h_p){
@@ -339,12 +340,6 @@ class coroutine_packer{
         
     }
 
-    void check_and_push_result(){
-        if(this->co_state_ptr->value_ready()){
-            this->result_list.push_back(this->co_state_ptr->get_promise_value());
-        }
-    }
-
     auto get_coroutine_state_ptr(){
         return this->co_state_ptr;
     }
@@ -362,6 +357,13 @@ class coroutine_packer{
     }
 
     virtual ~coroutine_packer(){
+    }
+
+    private:
+     void check_and_push_result(){
+        if(this->co_state_ptr->value_ready()){
+            this->result_list.push_back(this->co_state_ptr->get_promise_value());
+        }
     }
 
 

@@ -41,6 +41,7 @@ coroutine_states<void> func3(std::string num){
 int main(){
     auto co (func("co"));
     coroutine_states<std::string, int,std::string> co2 = func2("co2");
+    auto co_t = co;
     using type = decltype(co);
     auto num = 1;
     std::cout<<"############################################# Scheduler_"<<num<<" #############################################"<<std::endl;
@@ -77,7 +78,7 @@ int main(){
 
     std::cout<<"############################################# Scheduler_"<<num<<" #############################################"<<std::endl;
     auto coo (func("co"));
-    Scheduler<type, scheduler_mode::PriorityScheduling> sche3(coroutine_packer(coo,2), func2("co2"), coroutine_packer(func2("co3"),3));
+    Scheduler<type, scheduler_mode::PriorityScheduling> sche3(coroutine_packer(co_t,2), func2("co2"), coroutine_packer(func2("co3"),3));
     sche3.push_coroutine(coroutine_packer(func("co4"), 99));
     auto vec = sche3.get_running_id_vector();
     std::cout<<"running id:";
