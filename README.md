@@ -167,3 +167,22 @@
         std::cout<<"end---------"<<std::endl;
     }
 ```
+对于Scheduler,有如下定义：
+```
+    template<typename CoroutineType = coroutine_states<void>,
+             typename PriorityMode = scheduler_mode::FairScheduling,
+             typename MemoryMode = memmory_mode::LinearQueues,
+             template <typename> class  ContainerType = std::list>
+    class Scheduler;
+```
+>其中：
+>
+> CoroutineType--协程类型，**默认为空状态协程**
+>
+> PriorityMode--调度模式，**默认为公平调度模式（忽略优先级）**
+>
+> MemoryMode--存储模式，**默认为线性队列存储**
+>
+> ContainerType--容器类型，**默认为使用std::list**作为存储容器
+## 更多示例参见 ***example.cpp***
+# ⚠当前版本Scheduler各组件均为***非线程安全***，使用时请注意
