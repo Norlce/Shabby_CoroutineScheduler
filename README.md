@@ -19,10 +19,8 @@
   - ### 一个简单的协程函数示例
   ```
   coroutine_states<void> func(std::string num){
-    //获取当前协程的id值，其中p需要是可被取地址的左值
-    uint64_t p;
-    current_corotine_id(p);
-    co_await awaiter_no_value_ready{};
+    //获取当前协程的id值
+    auto p = current_corotine_id();
 
     for(int i = 0; i<30; i++){
         std::cout<<num<<':'<<__FUNCTION__<<" now value:"<<i<<std::endl;
@@ -102,8 +100,7 @@
 ```
     coroutine_states<std::string, int,std::string> func(std::string coro_num){
         co_await awaiter_stop{};
-        uint64_t p;
-        current_corotine_id(p);
+        auto p = current_corotine_id();
         co_await awaiter_no_value_ready{};
         std::cout<<coro_num<<':'<<"coro_handle:"<<std::hex<<(uint64_t)p<<std::endl;
         for(int i = 0; i<9; i++){
@@ -113,8 +110,7 @@
     }
     
     coroutine_states<std::string, int,std::string> func2(std::string num){
-        uint64_t p;
-        current_corotine_id(p);
+        auto p = current_corotine_id();
         co_await awaiter_no_value_ready{};
         std::cout<<num<<':'<<"coro_handle:"<<std::hex<<(uint64_t)p<<std::endl;
         for(int i = 0; i<10; i++){

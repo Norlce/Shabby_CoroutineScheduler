@@ -7,7 +7,6 @@
 coroutine_states<std::string, int,std::string> func(std::string coro_num){
     auto p = current_corotine_id();
     std::cout<<coro_num<<':'<<"coro_handle:"<<std::hex<<' '<<p<<std::endl;
-    std::cout<<coro_num<<':'<<"coro_handle:"<<std::hex<<(uint64_t)p<<std::endl;
     for(int i = 0; i<9; i++){
         std::cout<<coro_num<<':'<<__FUNCTION__<<" now value:"<<i<<std::endl;
         co_yield {coro_num, i, std::to_string(i+100)}; 
