@@ -5,10 +5,8 @@
 #include<map>
 
 coroutine_states<std::string, int,std::string> func(std::string coro_num){
-    co_await awaiter_stop{};
-    uint64_t p;
-    current_corotine_id(p);
-    co_await awaiter_no_value_ready{};
+    auto p = current_corotine_id();
+    std::cout<<coro_num<<':'<<"coro_handle:"<<std::hex<<' '<<p<<std::endl;
     std::cout<<coro_num<<':'<<"coro_handle:"<<std::hex<<(uint64_t)p<<std::endl;
     for(int i = 0; i<9; i++){
         std::cout<<coro_num<<':'<<__FUNCTION__<<" now value:"<<i<<std::endl;
@@ -17,10 +15,8 @@ coroutine_states<std::string, int,std::string> func(std::string coro_num){
 }
 
 coroutine_states<std::string, int,std::string> func2(std::string num){
-    uint64_t p;
-    current_corotine_id(p);
-    co_await awaiter_no_value_ready{};
-    std::cout<<num<<':'<<"coro_handle:"<<std::hex<<(uint64_t)p<<std::endl;
+    auto p = current_corotine_id();
+    std::cout<<num<<':'<<"coro_handle:"<<std::hex<<' '<<p<<std::endl;
     for(int i = 0; i<10; i++){
         std::cout<<num<<':'<<__FUNCTION__<<" now value:"<<i<<std::endl;
         co_yield {num, i, std::to_string(i+200)};
@@ -28,10 +24,8 @@ coroutine_states<std::string, int,std::string> func2(std::string num){
 }
 
 coroutine_states<void> func3(std::string num){
-    uint64_t p;
-    current_corotine_id(p);
-    co_await awaiter_no_value_ready{};
-    std::cout<<num<<':'<<"coro_handle:"<<std::hex<<(uint64_t)p<<std::endl;
+    auto p = current_corotine_id();
+    std::cout<<num<<':'<<"coro_handle:"<<std::hex<<' '<<p<<std::endl;
     for(int i = 0; i<30; i++){
         std::cout<<num<<':'<<__FUNCTION__<<" now value:"<<i<<std::endl;
         co_await awaiter_stop{};
