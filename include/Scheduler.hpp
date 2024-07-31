@@ -134,12 +134,13 @@ class Scheduler<CoroutineType, scheduler_mode::PriorityScheduling, memmory_mode:
         (this->push_coroutine(packer_type(std::forward<T>(t))),...);
     }
 
-    void push_coroutine(packer_type packer){
+    co_id_t push_coroutine(packer_type packer){
         auto priority = packer.get_priority();
         auto id = packer.get_id();
         this->priority_set.insert(priority);
         this->pri_packerlist_map[priority].push_back(packer);
         this->co_map[id] = (--(this->pri_packerlist_map[priority].end()));
+        return id;
     }
 
     void step(){
