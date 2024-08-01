@@ -125,24 +125,24 @@ class coroutine_states{
 
     public:
     using handle_type = handle_packer<promise_type>;
-    virtual operator bool(){
+    operator bool(){
         return  !(this->handle().done());
     }
 
-    virtual value_type get_promise_value(){
+    value_type get_promise_value(){
         this->handle().promise().result_ready = false;
         return this->handle().promise().result;
     }
 
-    virtual void operator ()(){
+    void operator ()(){
         this->handle().resume();
     }
 
-    virtual void resume(){
+    void resume(){
         this->handle().resume();
     }
 
-    virtual bool value_ready(){
+    bool value_ready(){
         return this->handle().promise().result_ready;
     }
 
@@ -165,7 +165,7 @@ class coroutine_states{
         this->handle = co_base.handle;
         this->coroutine_id = co_base.coroutine_id;
     }
-    virtual ~coroutine_states(){
+    ~coroutine_states(){
     }
 
     private:
@@ -289,15 +289,17 @@ class coroutine_packer{
     using co_base_handle_t = typename CoroutineType::handle_type;
     using value_list_t = std::list<value_type>;
 
+    coroutine_packer():co_state_ptr(nullptr){}
+
     coroutine_packer(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new CoroutineType(std::forward<co_base_t>(coro_base))),
     priority(pri){
-        this->check_and_push_result();
+        // this->check_and_push_result();
     }
     coroutine_packer(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new CoroutineType(coro_base)),
     priority(pri){
-        this->check_and_push_result();
+        // this->check_and_push_result();
     }
 
     coroutine_packer(coroutine_packer&& co):
@@ -381,6 +383,10 @@ class coroutine_packer<coroutine_states<void>>{
     using co_packer_com_type = void;
     using co_base_t = coroutine_states<void>;
     using co_base_handle_t = typename coroutine_states<void>::handle_type;
+
+    coroutine_packer():
+    co_state_ptr(nullptr),
+    priority(LOWEST_LEVEL){}
 
     coroutine_packer(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new coroutine_states<void>(std::forward<co_base_t>(coro_base))),
