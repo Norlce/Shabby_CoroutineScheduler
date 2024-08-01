@@ -62,7 +62,9 @@ class Scheduler<CoroutineType, scheduler_mode::FairScheduling, std::list>
                 co();
             }
             else{
-                this->id_list.erase(id_list_it);
+                auto tmp = id_list_it;
+                id_list_it++;
+                this->id_list.erase(tmp);
                 this->finished_list.push_back(id);
             }
         }
