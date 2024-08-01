@@ -1,57 +1,88 @@
 #pragma once
-#include"coroutine_base.hpp"
 #include<list>
 #include<tuple>
 #include<map>
+#include<unordered_map>
 #include<vector>
 #include<set>
+#include<atomic>
+#include<mutex>
+#include<algorithm>
+#include"coroutine_base.hpp"
 
-template<typename CoroutineType = coroutine_states<void>, typename PriorityMode = scheduler_mode::FairScheduling, typename MemoryMode = memmory_mode::LinearQueues, template <typename> class  ContainerType = std::list>
+template<typename CoroutineType = coroutine_states<void>, typename PriorityMode = scheduler_mode::FairScheduling,  template <typename> class  ContainerType = std::list>
 class Scheduler;
 
 template<typename CoroutineType>
 requires Concept_CorotineType<CoroutineType>
-class Scheduler<CoroutineType, scheduler_mode::FairScheduling, memmory_mode::LinearQueues, std::list>
+class Scheduler<CoroutineType, scheduler_mode::FairScheduling, std::list>
 {
     public:
     using value_type = CoroutineType::value_type;
     using packer_type = typename CoroutineType::packer_type;
     using value_list_t = std::list<value_type>;
 
-    Scheduler(){}
+    Scheduler():current_id(NOP_ID){}
 
-    Scheduler(packer_type ct){
+    Scheduler(packer_type ct):current_id(NOP_ID){
         this->push_coroutine(ct);
     }
 
     template<typename ...T>
     requires Concept_CoroutinePackerType_or_CorotineTypes<T...>
-    Scheduler(T&&... t){
+    Scheduler(T&&... t):current_id(NOP_ID){
         ([&](){
-            this->push_coroutine(packer_type(std::forward<T>(t)));
+            this->push_coroutine(std::forward<T>(t));
         }(),...);
     }
 
-    void push_coroutine(packer_type ct){
-        this->co_list.push_back(ct);
-        this->co_map[ct.get_id()] = (--this->co_list.end());
+    co_id_t push_coroutine(packer_type ct){
+        auto id = ct.get_id();
+        this->id_list.push_back(id);
+        this->co_map.insert({id, ct});
+        return id;
     }
 
     void step(){
-        for(auto it = this->co_list.begin(); it!=this->co_list.end(); it++){
-            if(*it){
-                (*it)();
+        std::lock_guard<std::mutex> lk(this->running_mutex);
+        auto id_list_it
+             = (this->current_id.load())?
+                std::find(this->id_list.begin(), this->id_list.end(), this->current_id.load()):
+                this->id_list.begin();
+
+        this->interrupt_tag = false;
+        for(; id_list_it!=this->id_list.end();id_list_it++){
+            auto id = *id_list_it;
+            this->current_id = id;
+            if(this->interrupt_tag.load()){
+                return ;
+            }
+            auto& co = co_map[id];
+            if(co){
+                co();
             }
             else{
-                this->finished_list.push_back(*it);
-                this->co_map[it->get_id()] = (--this->finished_list.end());
-                this->co_list.erase(it);
+                this->id_list.erase(id_list_it);
+                this->finished_list.push_back(id);
             }
         }
+        this->current_id = NOP_ID;
+    }
+
+    void step_one(){
+        std::lock_guard<std::mutex> lk(this->running_mutex);
+        std::list<co_id_t>::iterator id_list_it
+             = (this->current_id.load())?
+                std::find(this->id_list.begin(), this->id_list.end(), this->current_id.load()):
+                this->id_list.begin();
+        auto id = *id_list_it;
+        auto& co = this->co_map[id];
+        id_list_it++;
+        this->current_id = *id_list_it;
     }
 
     void continuous(){
-        while(!this->co_list.empty()){
+        while(!this->id_list.empty()){
             this->step();
         }
     }
@@ -60,27 +91,31 @@ class Scheduler<CoroutineType, scheduler_mode::FairScheduling, memmory_mode::Lin
         if(!this->co_map.contains(co_id)){
             return {};
         }
-        auto co_iterator = this->co_map[co_id];
-        auto value_list = co_iterator->get_value_list();
-        if(!(*co_iterator)){
+        auto &co = this->co_map[co_id];
+        auto value_list = co.get_value_list();
+        if(co){
             this->co_map.erase(co_id);
-            this->finished_list.erase(co_iterator);
+            this->finished_list.erase(
+                std::find(this->finished_list.begin(), 
+                            this->finished_list.end(),
+                            co_id)
+            );
         }
         return value_list;
     }
 
     auto get_finishied_id_vector(){
         std::vector<co_id_t> vec;
-        for(auto co: this->finished_list){
-            vec.push_back(co.get_id());
+        for(auto id: this->finished_list){
+            vec.push_back(id);
         }
         return vec;
     }
 
     auto get_running_id_vector(){
         std::vector<co_id_t> id_list;
-        for(auto &co: this->co_list){
-            id_list.push_back(co.get_id());
+        for(auto id: this->id_list){
+            id_list.push_back(id);
         }
         return id_list;
     }
@@ -89,9 +124,12 @@ class Scheduler<CoroutineType, scheduler_mode::FairScheduling, memmory_mode::Lin
     }
 
     private:
-    std::list<packer_type> co_list;
-    std::map<co_id_t,  typename std::list<packer_type>::iterator > co_map;
-    std::list<packer_type> finished_list;
+    std::list<co_id_t> id_list;
+    std::unordered_map< co_id_t,  packer_type > co_map;
+    std::list<co_id_t> finished_list;
+    std::atomic<co_id_t> current_id;
+    std::atomic_bool interrupt_tag;
+    std::mutex running_mutex;
 };
 
 /*
@@ -113,7 +151,7 @@ ________________________________________________________________________________
 */
 template<typename CoroutineType>
 requires Concept_CorotineType<CoroutineType>
-class Scheduler<CoroutineType, scheduler_mode::PriorityScheduling, memmory_mode::LinearQueues, std::list>
+class Scheduler<CoroutineType, scheduler_mode::PriorityScheduling, std::list>
 {   
     public:
     using value_type = CoroutineType::value_type;
@@ -235,7 +273,7 @@ template<typename ...T>
 Scheduler(T&&...)->Scheduler<std::decay_t<T>...>;
 
 template<>
-class Scheduler<coroutine_states<void>, scheduler_mode::FairScheduling, memmory_mode::LinearQueues, std::list>
+class Scheduler<coroutine_states<void>, scheduler_mode::FairScheduling, std::list>
 {
     using CoroutineType = coroutine_states<void>;
     public:
@@ -293,7 +331,7 @@ class Scheduler<coroutine_states<void>, scheduler_mode::FairScheduling, memmory_
 };
 
 template<>
-class Scheduler<coroutine_states<void>, scheduler_mode::PriorityScheduling, memmory_mode::LinearQueues, std::list>
+class Scheduler<coroutine_states<void>, scheduler_mode::PriorityScheduling, std::list>
 {
     using CoroutineType = coroutine_states<void>;
     public:
