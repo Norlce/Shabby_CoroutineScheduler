@@ -1,4 +1,5 @@
 #pragma once
+#include <coroutine>
 
 using co_id_t = std::size_t;
 constexpr co_id_t NOP_ID = 0;

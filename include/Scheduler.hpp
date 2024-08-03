@@ -1,16 +1,17 @@
 #pragma once
 #include<list>
-#include<tuple>
 #include<map>
 #include<unordered_map>
 #include<vector>
 #include<set>
 #include<atomic>
 #include<mutex>
-#include<algorithm>
-#include"coroutine_base.hpp"
+#include <algorithm>
+#include "assistance.hpp"
+#include "coroutine_base.hpp"
+#include "concepts.hpp"
 
-template<typename CoroutineType = coroutine_states<void>, typename PriorityMode = scheduler_mode::FairScheduling,  template <typename> class  ContainerType = std::list>
+template<typename CoroutineType = coroutine_states<void>, typename PriorityMode = scheduler_mode::FairScheduling,  template <typename, typename> class  ContainerType = std::list>
 class Scheduler;
 
 template<typename CoroutineType>
@@ -50,13 +51,13 @@ class Scheduler<CoroutineType, scheduler_mode::FairScheduling, std::list>
                 std::find(this->id_list.begin(), this->id_list.end(), this->current_id.load()):
                 this->id_list.begin();
 
-        this->interrupt_tag = false;
         for(; id_list_it!=this->id_list.end();id_list_it++){
+            if(this->interrupt_tag.load()){
+                interrupt_tag = false;
+                return;
+            }
             auto id = *id_list_it;
             this->current_id = id;
-            if(this->interrupt_tag.load()){
-                return ;
-            }
             auto& co = co_map[id];
             if(co){
                 co();
@@ -75,10 +76,23 @@ class Scheduler<CoroutineType, scheduler_mode::FairScheduling, std::list>
              = (this->current_id.load())?
                 std::find(this->id_list.begin(), this->id_list.end(), this->current_id.load()):
                 this->id_list.begin();
+        
+        if(this->interrupt_tag.load()){
+            interrupt_tag = false;
+            return;
+        }
+
         auto id = *id_list_it;
         auto& co = this->co_map[id];
+        if(co){
+            co();
+        }
+        else{
+            id_list_it = this->id_list.erase(id_list_it);
+            this->finished_list.push_back(id);
+        }
         id_list_it++;
-        this->current_id = *id_list_it;
+        this->current_id = (id_list_it==this->id_list.end())?NOP_ID:*id_list_it;
     }
 
     void continuous(){
@@ -93,7 +107,7 @@ class Scheduler<CoroutineType, scheduler_mode::FairScheduling, std::list>
         }
         auto &co = this->co_map[co_id];
         auto value_list = co.get_value_list();
-        if(co){
+        if(!co){
             this->co_map.erase(co_id);
             this->finished_list.erase(
                 std::find(this->finished_list.begin(), 
@@ -113,15 +127,25 @@ class Scheduler<CoroutineType, scheduler_mode::FairScheduling, std::list>
     }
 
     auto get_running_id_vector(){
-        std::vector<co_id_t> id_list;
+        std::vector<co_id_t> vec;
         for(auto id: this->id_list){
-            id_list.push_back(id);
+            vec.push_back(id);
         }
-        return id_list;
+        return vec;
     }
 
-    ~Scheduler(){
+    auto get_co_id_vector(){
+        std::vector<co_id_t> vec;
+        for(auto id: this->finished_list){
+            vec.push_back(id);
+        }
+        for(auto id: this->id_list){
+            vec.push_back(id);
+        }
+        return vec;
     }
+
+    ~Scheduler() {}
 
     private:
     std::list<co_id_t> id_list;
