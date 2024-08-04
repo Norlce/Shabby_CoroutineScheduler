@@ -220,7 +220,7 @@ class Scheduler<CoroutineType, scheduler_mode::PriorityScheduling, std::list>
                     else{
                         this->finished_list.push_back(*packerlist_it);
                         this->co_map[packerlist_it->get_id()] = (--(this->finished_list.end()));
-                        current_packerlist.erase(packerlist_it);
+                        packerlist_it = current_packerlist.erase(packerlist_it);
                     }
                 }
                 if(current_packerlist.empty()){
@@ -328,7 +328,7 @@ class Scheduler<coroutine_states<void>, scheduler_mode::FairScheduling, std::lis
                 (*it)();
             }
             else{
-                this->co_list.erase(it);
+                it = this->co_list.erase(it);
             }
         }
     }
@@ -397,7 +397,7 @@ class Scheduler<coroutine_states<void>, scheduler_mode::PriorityScheduling, std:
                         (*packerlist_it)();
                     }
                     else{
-                        current_packerlist.erase(packerlist_it);
+                        packerlist_it = current_packerlist.erase(packerlist_it);
                     }
                 }
                 if(current_packerlist.empty()){
