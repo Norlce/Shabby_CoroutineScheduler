@@ -3,6 +3,7 @@
 #include<iostream>
 #include<memory>
 #include<list>
+#include <mutex>
 #include"assistance.hpp"
 #include"awaiters.hpp"
 
@@ -335,6 +336,7 @@ class coroutine_packer{
     }
 
     void resume(){
+        std::lock_guard lk(this->running_mutex);
         this->co_state_ptr->resume();
         this->check_and_push_result();
         
@@ -371,6 +373,7 @@ class coroutine_packer{
     std::shared_ptr<CoroutineType> co_state_ptr;
     value_list_t result_list;
     priority_t priority;
+    std::mutex running_mutex;
 };
 
 using void_co_t = coroutine_states<void>;
@@ -424,6 +427,7 @@ class coroutine_packer<coroutine_states<void>>{
     }
 
     void resume(){
+        std::lock_guard lk(this->running_mutex);
         this->co_state_ptr->resume();
     }
 
@@ -443,4 +447,5 @@ class coroutine_packer<coroutine_states<void>>{
     private:
     std::shared_ptr<coroutine_states<void>> co_state_ptr;
     priority_t priority;
+    std::mutex running_mutex;
 };
