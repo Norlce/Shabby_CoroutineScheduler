@@ -72,6 +72,7 @@ class Scheduler<CoroutineType>
         this->co_map.insert({id, packer});
         this->id_set.insert(id);
         this->pri_map[priority].insert(id);
+        std::cout<<id<<' '<<priority<<" has pushed in list"<<std::endl;
         return id;
     }
 
@@ -151,6 +152,7 @@ class Scheduler<CoroutineType>
                     for(auto maped_set_it = maped_id_set.begin(); maped_set_it!=maped_id_set.end(); maped_set_it++){
                         auto id = *maped_set_it;
                         co_yield id;
+                        if(!this->co_map.contains(id))  break;
                         auto &co = this->co_map[id];
                         if(!co){
                             this->finished_id_set.insert(id);
@@ -287,6 +289,7 @@ class Scheduler<coroutine_states<void>>
                     for(auto maped_set_it = maped_id_set.begin(); maped_set_it!=maped_id_set.end(); maped_set_it++){
                         auto id = *maped_set_it;
                         co_yield id;
+                        if(!this->co_map.contains(id)) break;
                         auto &co = this->co_map[id];
                         if(!co){
                             this->id_set.erase(id);
