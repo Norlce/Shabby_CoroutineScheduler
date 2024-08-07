@@ -4,6 +4,7 @@
 #include<memory>
 #include<list>
 #include <mutex>
+#include <type_traits>
 #include"assistance.hpp"
 #include"awaiters.hpp"
 
@@ -11,6 +12,9 @@ struct promise_type;
 
 template<typename ...T>
 class coroutine_states;
+
+template<>
+class coroutine_states<void>;
 
 //Contains the various states of the coroutine
 template<typename T>
@@ -153,8 +157,17 @@ class coroutine_states{
         return this->coroutine_id;
     }
 
-    coroutine_states(coroutine_states&& co_base):handle(std::move(co_base.handle)),coroutine_id(co_base.coroutine_id){}
-    coroutine_states(const coroutine_states& co_base):handle(co_base.handle), coroutine_id(co_base.coroutine_id){}
+    void lock(){
+        this->running_mutex->lock();
+    }
+
+    coroutine_states(coroutine_states&& co_base):
+    handle(std::move(co_base.handle)),
+    coroutine_id(co_base.coroutine_id){}
+
+    coroutine_states(const coroutine_states& co_base):
+    handle(co_base.handle),
+    coroutine_id(co_base.coroutine_id){}
 
     void operator=(const coroutine_states& co_base){
         this->handle = co_base.handle;
@@ -168,9 +181,13 @@ class coroutine_states{
     }
 
     private:
+    coroutine_states(std::coroutine_handle<promise_type>&& h):
+    handle(h.address()),
+    coroutine_id(co_id_t(h.address())){}
+
+    private:
     handle_type handle;
     co_id_t coroutine_id;
-    coroutine_states(std::coroutine_handle<promise_type>&& h):handle(h.address()),coroutine_id(co_id_t(h.address())){}
 };
 
 template<>
@@ -258,8 +275,13 @@ class coroutine_states<void>{
         return this->coroutine_id;
     }
 
-    coroutine_states(coroutine_states&& co_base):handle(std::move(co_base.handle)),coroutine_id(co_base.coroutine_id){}
-    coroutine_states(const coroutine_states& co_base):handle(co_base.handle), coroutine_id(co_base.coroutine_id){}
+    coroutine_states(coroutine_states&& co_base):
+    handle(std::move(co_base.handle)),
+    coroutine_id(co_base.coroutine_id){}
+
+    coroutine_states(const coroutine_states& co_base):
+    handle(co_base.handle),
+    coroutine_id(co_base.coroutine_id){}
 
     void operator=(const coroutine_states& co_base){
         this->handle = co_base.handle;
@@ -272,18 +294,18 @@ class coroutine_states<void>{
     virtual ~coroutine_states(){
     }
 
-
+    private:
+    coroutine_states(std::coroutine_handle<promise_type>&& h):handle(h.address()),coroutine_id(co_id_t(h.address())){}
     private:
     handle_type handle;
     co_id_t coroutine_id;
-    coroutine_states(std::coroutine_handle<promise_type>&& h):handle(h.address()),coroutine_id(co_id_t(h.address())){}
 };
 
 template<typename CoroutineType>
 class coroutine_packer{
     public:
     using co_packer_com_type = void;
-    using value_type = CoroutineType::value_type;
+    using value_type = typename CoroutineType::value_type;
     using co_base_t = CoroutineType;
     using co_base_handle_t = typename CoroutineType::handle_type;
     using value_list_t = std::list<value_type>;
@@ -292,35 +314,43 @@ class coroutine_packer{
 
     coroutine_packer(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new CoroutineType(std::forward<co_base_t>(coro_base))),
-    priority(pri){
+    priority(pri),
+    running_mutex(new std::mutex){
         // this->check_and_push_result();
     }
     coroutine_packer(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new CoroutineType(coro_base)),
-    priority(pri){
+    priority(pri),
+    running_mutex(new std::mutex){
         // this->check_and_push_result();
     }
 
     coroutine_packer(coroutine_packer&& co):
     co_state_ptr(co.co_state_ptr),
     result_list(co.result_list),
-    priority(co.priority){
+    priority(co.priority),
+    running_mutex(co.running_mutex){
         this->check_and_push_result();
     }
     coroutine_packer(const coroutine_packer& co):
     co_state_ptr(co.co_state_ptr),
     result_list(co.result_list),
-    priority(co.priority){
+    priority(co.priority),
+    running_mutex(co.running_mutex){
         this->check_and_push_result();
     }
 
     void operator=(coroutine_packer&& co){
         this->co_state_ptr = co.co_state_ptr;
         this->result_list = co.result_list;
+        this->priority = co.priority;
+        this->running_mutex = co.running_mutex;
     }
     void operator=(const coroutine_packer& co){
         this->co_state_ptr = co.co_state_ptr;
         this->result_list = co.result_list;
+        this->priority = co.priority;
+        this->running_mutex = co.running_mutex;
     }
 
     bool operator==(const coroutine_packer& co){
@@ -336,9 +366,11 @@ class coroutine_packer{
     }
 
     void resume(){
-        std::lock_guard lk(this->running_mutex);
-        this->co_state_ptr->resume();
-        this->check_and_push_result();
+        std::lock_guard lk(*this->running_mutex);
+        if(*(this->co_state_ptr)){
+            this->co_state_ptr->resume();
+            this->check_and_push_result();
+        }
         
     }
 
@@ -355,6 +387,15 @@ class coroutine_packer{
     }
 
     value_list_t get_value_list(){
+        auto self = this;
+        struct S{
+            decltype(self) p;
+            S(){}
+            ~S(){
+                p->result_list.clear();
+            }
+        };
+        S s{self};
         return this->result_list;
     }
 
@@ -373,7 +414,8 @@ class coroutine_packer{
     std::shared_ptr<CoroutineType> co_state_ptr;
     value_list_t result_list;
     priority_t priority;
-    std::mutex running_mutex;
+
+    std::shared_ptr<std::mutex> running_mutex;
 };
 
 using void_co_t = coroutine_states<void>;
@@ -387,31 +429,40 @@ class coroutine_packer<coroutine_states<void>>{
 
     coroutine_packer():
     co_state_ptr(nullptr),
-    priority(LOWEST_LEVEL){}
+    priority(LOWEST_LEVEL),
+    running_mutex(new std::mutex){}
 
     coroutine_packer(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new coroutine_states<void>(std::forward<co_base_t>(coro_base))),
-    priority(pri)
+    priority(pri),
+    running_mutex(new std::mutex)
     {}
     coroutine_packer(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new coroutine_states<void>(coro_base)),
-    priority(pri)
+    priority(pri),
+    running_mutex(new std::mutex)
     {}
 
     coroutine_packer(coroutine_packer&& co):
     co_state_ptr(co.co_state_ptr),
-    priority(co.priority)
+    priority(co.priority),
+    running_mutex(co.running_mutex)
     {}
     coroutine_packer(const coroutine_packer& co):
     co_state_ptr(co.co_state_ptr),
-    priority(co.priority)
+    priority(co.priority),
+    running_mutex(co.running_mutex)
     {}
 
     void operator=(coroutine_packer&& co){
         this->co_state_ptr = co.co_state_ptr;
+        this->priority = co.priority;
+        this->running_mutex = co.running_mutex;
     }
     void operator=(const coroutine_packer& co){
         this->co_state_ptr = co.co_state_ptr;
+        this->priority = co.priority;
+        this->running_mutex = co.running_mutex;
     }
 
     bool operator==(const coroutine_packer& co){
@@ -419,7 +470,7 @@ class coroutine_packer<coroutine_states<void>>{
     }
 
     void operator()(){
-        this->co_state_ptr->resume();
+        this->resume();
     }
 
     operator bool(){
@@ -427,8 +478,9 @@ class coroutine_packer<coroutine_states<void>>{
     }
 
     void resume(){
-        std::lock_guard lk(this->running_mutex);
-        this->co_state_ptr->resume();
+        std::lock_guard lk(*this->running_mutex);
+        if(*(this->co_state_ptr))
+            this->co_state_ptr->resume();
     }
 
     auto get_coroutine_state_ptr(){
@@ -447,5 +499,5 @@ class coroutine_packer<coroutine_states<void>>{
     private:
     std::shared_ptr<coroutine_states<void>> co_state_ptr;
     priority_t priority;
-    std::mutex running_mutex;
+    std::shared_ptr<std::mutex> running_mutex;
 };
