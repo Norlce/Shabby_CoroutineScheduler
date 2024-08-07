@@ -1,6 +1,10 @@
 #pragma once
+#include <corecrt.h>
+#include <functional>
+#include <iterator>
 #include<list>
 #include<map>
+#include <thread>
 #include<unordered_map>
 #include<vector>
 #include<set>
@@ -8,165 +12,28 @@
 #include<mutex>
 #include <algorithm>
 #include "assistance.hpp"
+#include "awaiters.hpp"
 #include "coroutine_base.hpp"
 #include "concepts.hpp"
 
-template<typename CoroutineType = coroutine_states<void>, typename PriorityMode = scheduler_mode::FairScheduling,  template <typename, typename> class  ContainerType = std::list>
+template<typename CoroutineType = coroutine_states<void>>
 class Scheduler;
-
-template<typename CoroutineType>
-requires Concept_CorotineType<CoroutineType>
-class Scheduler<CoroutineType, scheduler_mode::FairScheduling, std::list>
-{
-    public:
-    using value_type = CoroutineType::value_type;
-    using packer_type = typename CoroutineType::packer_type;
-    using value_list_t = std::list<value_type>;
-
-    Scheduler():current_id(NOP_ID){}
-
-    Scheduler(packer_type ct):current_id(NOP_ID){
-        this->push_coroutine(ct);
-    }
-
-    template<typename ...T>
-    requires Concept_CoroutinePackerType_or_CorotineTypes<T...>
-    Scheduler(T&&... t):current_id(NOP_ID){
-        ([&](){
-            this->push_coroutine(std::forward<T>(t));
-        }(),...);
-    }
-
-    co_id_t push_coroutine(packer_type ct){
-        auto id = ct.get_id();
-        this->id_list.push_back(id);
-        this->co_map.insert({id, ct});
-        return id;
-    }
-
-    void step(){
-        std::lock_guard<std::mutex> lk(this->running_mutex);
-        auto id_list_it
-             = (this->current_id.load())?
-                std::find(this->id_list.begin(), this->id_list.end(), this->current_id.load()):
-                this->id_list.begin();
-
-        for(; id_list_it!=this->id_list.end();id_list_it++){
-            if(this->interrupt_tag.load()){
-                interrupt_tag = false;
-                return;
-            }
-            auto id = *id_list_it;
-            this->current_id = id;
-            auto& co = co_map[id];
-            if(co){
-                co();
-            }
-            else{
-                id_list_it = this->id_list.erase(id_list_it);
-                this->finished_list.push_back(id);
-            }
-        }
-        this->current_id = NOP_ID;
-    }
-
-    void step_one(){
-        std::lock_guard<std::mutex> lk(this->running_mutex);
-        std::list<co_id_t>::iterator id_list_it
-             = (this->current_id.load())?
-                std::find(this->id_list.begin(), this->id_list.end(), this->current_id.load()):
-                this->id_list.begin();
-        
-        if(this->interrupt_tag.load()){
-            interrupt_tag = false;
-            return;
-        }
-
-        auto id = *id_list_it;
-        auto& co = this->co_map[id];
-        if(co){
-            co();
-        }
-        else{
-            id_list_it = this->id_list.erase(id_list_it);
-            this->finished_list.push_back(id);
-        }
-        id_list_it++;
-        this->current_id = (id_list_it==this->id_list.end())?NOP_ID:*id_list_it;
-    }
-
-    void continuous(){
-        while(!this->id_list.empty()){
-            this->step();
-        }
-    }
-
-    value_list_t get_value_list(co_id_t co_id){
-        if(!this->co_map.contains(co_id)){
-            return {};
-        }
-        auto &co = this->co_map[co_id];
-        auto value_list = co.get_value_list();
-        if(!co){
-            this->co_map.erase(co_id);
-            this->finished_list.erase(
-                std::find(this->finished_list.begin(), 
-                            this->finished_list.end(),
-                            co_id)
-            );
-        }
-        return value_list;
-    }
-
-    auto get_finishied_id_vector(){
-        std::vector<co_id_t> vec;
-        for(auto id: this->finished_list){
-            vec.push_back(id);
-        }
-        return vec;
-    }
-
-    auto get_running_id_vector(){
-        std::vector<co_id_t> vec;
-        for(auto id: this->id_list){
-            vec.push_back(id);
-        }
-        return vec;
-    }
-
-    auto get_co_id_vector(){
-        std::vector<co_id_t> vec;
-        for(auto id: this->finished_list){
-            vec.push_back(id);
-        }
-        for(auto id: this->id_list){
-            vec.push_back(id);
-        }
-        return vec;
-    }
-
-    ~Scheduler() {}
-
-    private:
-    std::list<co_id_t> id_list;
-    std::unordered_map< co_id_t,  packer_type > co_map;
-    std::list<co_id_t> finished_list;
-    std::atomic<co_id_t> current_id;
-    std::atomic_bool interrupt_tag;
-    std::mutex running_mutex;
-};
 
 /*
 ________________________________________________________________________________________________________________________________________________________________________________
-#finish_list:
-[finished_co]->[finished_co]->[finished_co]->[finished_co]->[finished_co]
+#finish_set:
+[finished_id]->[finished_id]->[finished_id]->[finished_id]->[finished_id]
 ###
 
-#co_list:
-[coroutine_base]->[coroutine_base]->[coroutine_base]->[coroutine_base]->[coroutine_base]
+#co_id_set:
+[coroutine_id]->[coroutine_id]->[coroutine_id]->[coroutine_id]->[coroutine_id]
 ###
 
-#pri_list_map:
+#co_set:
+[coroutine]->[coroutine]->[coroutine]->[coroutine]->[coroutine]
+###
+
+#pri_map:
 [priority]      [priority]      [priority]
     |                |              |
  [co_list]       [co_list]       [co_list]
@@ -175,7 +42,7 @@ ________________________________________________________________________________
 */
 template<typename CoroutineType>
 requires Concept_CorotineType<CoroutineType>
-class Scheduler<CoroutineType, scheduler_mode::PriorityScheduling, std::list>
+class Scheduler<CoroutineType>
 {   
     public:
     using value_type = CoroutineType::value_type;
@@ -184,265 +51,279 @@ class Scheduler<CoroutineType, scheduler_mode::PriorityScheduling, std::list>
     using packer_list_t = std::list<packer_type>;
 
     public:
-    Scheduler(){}
-
-    Scheduler(packer_type packer){
-        this->push_coroutine(packer);
-    }
+    Scheduler():
+    intterput(false),
+    teiminate(false),
+    next_co_packer(this->coroutine_next_co()){}
 
     template<typename ...T>
     requires Concept_CoroutinePackerType_or_CorotineTypes<T...>
-    Scheduler(T&&... t){
+    Scheduler(T&&... t):
+    intterput(false),
+    teiminate(false),
+    next_co_packer(this->coroutine_next_co()){
         (this->push_coroutine(packer_type(std::forward<T>(t))),...);
     }
 
     co_id_t push_coroutine(packer_type packer){
+        std::scoped_lock lk(this->co_map_mutex, this->id_set_mutex, this->pri_map_mutex);
         auto priority = packer.get_priority();
         auto id = packer.get_id();
-        this->priority_set.insert(priority);
-        this->pri_packerlist_map[priority].push_back(packer);
-        this->co_map[id] = (--(this->pri_packerlist_map[priority].end()));
+        this->co_map.insert({id, packer});
+        this->id_set.insert(id);
+        this->pri_map[priority].insert(id);
         return id;
     }
 
     void step(){
-        for(auto pri_it = this->priority_set.rbegin(); pri_it!=this->priority_set.rend(); pri_it++){
-            auto end_it = get_next_iterator(pri_it);
-            for(auto iter_it = this->priority_set.rbegin(); iter_it!=end_it; iter_it++){
-                if(!this->pri_packerlist_map.contains(*iter_it)){
-                    break;
-                }
-                auto& current_packerlist =  this->pri_packerlist_map[*iter_it];
-                for(auto packerlist_it = current_packerlist.begin(); packerlist_it!=current_packerlist.end(); packerlist_it++){
-                    if(*packerlist_it){
-                        (*packerlist_it)();
-                    }
-                    else{
-                        this->finished_list.push_back(*packerlist_it);
-                        this->co_map[packerlist_it->get_id()] = (--(this->finished_list.end()));
-                        packerlist_it = current_packerlist.erase(packerlist_it);
-                    }
-                }
-                if(current_packerlist.empty()){
-                    this->pri_packerlist_map.erase(*iter_it);
-                }
+        std::unique_lock lock_co_map(this->co_map_mutex);
+        co_id_t co_id = NOP_ID;
+        {
+            std::scoped_lock lk(this->running_mutex, this->id_set_mutex, this->finished_id_set_mutex, this->pri_map_mutex);
+            if(this->id_set.empty()) return ;
+            next_co_packer();
+            if(next_co_packer.value_ready()){
+                auto [id] = next_co_packer.get_promise_value();
+                co_id = id;
+            }
+            else{
+                return;
             }
         }
-        this->clean_pri_set();
+        if(!this->co_map.contains(co_id)) return;
+        auto &co = this->co_map[co_id];
+        lock_co_map.unlock();
+        co();
     }
 
     void continuous(){
-        while(!this->priority_set.empty()){
+        while(!this->id_set.empty()){
             this->step();
         }
     }
 
     value_list_t get_value_list(co_id_t co_id){
+        std::scoped_lock lk(this->co_map_mutex, this->finished_id_set_mutex);
         if(!this->co_map.contains(co_id)){
             return {};
         }
-        auto co_iterator = this->co_map[co_id];
-        auto value_list = co_iterator->get_value_list();
-        if(!(*co_iterator)){
+        auto& co = this->co_map[co_id];
+        auto value_list = co.get_value_list();
+        if(!co){
             this->co_map.erase(co_id);
-            this->finished_list.erase(co_iterator);
+            this->finished_id_set.erase(co_id);
         }
         return value_list;
     }
 
     auto get_finishied_id_vector(){
+        std::lock_guard lk(this->finished_id_set_mutex);
         std::vector<co_id_t> vec;
-        for(auto co: this->finished_list){
-            vec.push_back(co.get_id());
+        for(auto id: this->finished_id_set){
+            vec.push_back(id);
         }
         return vec;
     }
 
     auto get_running_id_vector(){
-        std::vector<co_id_t> id_list;
-        for(auto pri: this->priority_set){
-            auto& packer_list = this->pri_packerlist_map[pri];
-            for(auto &it: packer_list){
-                id_list.push_back(it.get_id());
-            }
+        std::lock_guard lk(this->id_set_mutex);
+        std::vector<co_id_t> vec;
+        for(auto id: this->id_set){
+            vec.push_back(id);
         }
-        return id_list;
+        return vec;
+    }
+
+    bool empty(){
+        return this->id_set.empty();
     }
 
     ~Scheduler(){
     }
 
     private:
-
-    void clean_pri_set(){
-        std::set<priority_t> tmp_set;
-        for(auto it: this->priority_set){
-            if(!this->pri_packerlist_map.contains(it)){
-                tmp_set.insert(it);
+    coroutine_states<co_id_t> coroutine_next_co(){
+        while(!teiminate){
+            for(auto pri_map_it = this->pri_map.begin(); pri_map_it!=this->pri_map.end(); pri_map_it++){
+                auto end_it = get_next_iterator(pri_map_it);
+                for(auto it = this->pri_map.begin(); it!=end_it; it++){
+                    auto& maped_id_set = it->second;
+                    for(auto maped_set_it = maped_id_set.begin(); maped_set_it!=maped_id_set.end(); maped_set_it++){
+                        auto id = *maped_set_it;
+                        co_yield id;
+                        auto &co = this->co_map[id];
+                        if(!co){
+                            this->finished_id_set.insert(id);
+                            this->id_set.erase(id);
+                            maped_set_it = maped_id_set.erase(maped_set_it);
+                            if(maped_set_it == maped_id_set.end()) break;
+                        }
+                    }
+                    if(maped_id_set.empty()){
+                        if(pri_map_it==it){
+                            it = this->pri_map.erase(it);
+                            pri_map_it = it;
+                        }
+                        else{
+                            it = this->pri_map.erase(it);
+                        }
+                    }
+                    if(it==this->pri_map.end()) break;
+                }
+                if(pri_map_it==this->pri_map.end()) break;
             }
-        }
-        for(auto it: tmp_set){
-            this->priority_set.erase(it);
+            co_await awaiter_stop{};
         }
     }
 
     private:
-    std::map<co_id_t,  typename packer_list_t::iterator > co_map;
-    std::map<priority_t, packer_list_t> pri_packerlist_map;
-    std::set<priority_t> priority_set;
-    packer_list_t finished_list;
+    std::set<co_id_t> id_set;
+    std::mutex id_set_mutex;
+
+    std::set<co_id_t> finished_id_set;
+    std::mutex finished_id_set_mutex;
+
+    std::unordered_map<co_id_t, packer_type> co_map;
+    std::mutex co_map_mutex;
+
+    std::map<priority_t, std::set<co_id_t>, std::greater<co_id_t>> pri_map;
+    std::mutex pri_map_mutex;
+
+    std::mutex running_mutex;
+    std::atomic_bool intterput;
+    std::atomic_bool teiminate;
+
+    coroutine_states<co_id_t> next_co_packer;
 };
 
 template<typename ...T>
 Scheduler(T&&...)->Scheduler<std::decay_t<T>...>;
 
 template<>
-class Scheduler<coroutine_states<void>, scheduler_mode::FairScheduling, std::list>
-{
-    using CoroutineType = coroutine_states<void>;
+class Scheduler<coroutine_states<void>>
+{   
     public:
-    using outcome_type = CoroutineType::value_type;
-    using packer_type = typename CoroutineType::packer_type;
-
-    Scheduler(){}
-
-    Scheduler(packer_type packer){
-        this->co_list.push_back(packer);
-    }
-
-    template<typename ...T>
-    requires Concept_CoroutinePackerType_or_CorotineTypes<T...>
-    Scheduler(T&&... t){
-        ([&](){
-            this->co_list.push_back(packer_type(std::forward<T>(t)));
-        }(),...);
-    }
-
-    void push_coroutine(packer_type ct){
-        this->co_list.push_back(ct);
-    }
-
-    void step(){
-        for(auto it = this->co_list.begin(); it!=this->co_list.end(); it++){
-            if(*it){
-                (*it)();
-            }
-            else{
-                it = this->co_list.erase(it);
-            }
-        }
-    }
-
-    void continuous(){
-        while(!this->co_list.empty()){
-            this->step();
-        }
-    }
-
-    auto get_running_id_vector(){
-        std::vector<co_id_t> id_list;
-        for(auto &co: this->co_list){
-            id_list.push_back(co.get_id());
-        }
-        return id_list;
-    }
-
-    ~Scheduler(){
-    }
-
-    private:
-    std::list<packer_type> co_list;
-};
-
-template<>
-class Scheduler<coroutine_states<void>, scheduler_mode::PriorityScheduling, std::list>
-{
     using CoroutineType = coroutine_states<void>;
-    public:
     using value_type = CoroutineType::value_type;
     using packer_type = typename CoroutineType::packer_type;
+    using value_list_t = std::list<value_type>;
     using packer_list_t = std::list<packer_type>;
 
-    Scheduler(){}
-
-    Scheduler(packer_type packer){
-        this->push_coroutine(packer);
-    }
+    public:
+    Scheduler():
+    intterput(false),
+    teiminate(false),
+    next_co_packer(this->coroutine_next_co()){}
 
     template<typename ...T>
     requires Concept_CoroutinePackerType_or_CorotineTypes<T...>
-    Scheduler(T&&... t){
-        ([&](){
-            this->push_coroutine(packer_type(std::forward<T>(t)));
-        }(),...);
+    Scheduler(T&&... t):
+    intterput(false),
+    teiminate(false),
+    next_co_packer(this->coroutine_next_co()){
+        (this->push_coroutine(packer_type(std::forward<T>(t))),...);
     }
 
-    void push_coroutine(packer_type packer){
+    co_id_t push_coroutine(packer_type packer){
+        std::scoped_lock lk(this->co_map_mutex, this->id_set_mutex, this->pri_map_mutex);
+        auto priority = packer.get_priority();
         auto id = packer.get_id();
-        auto pri = packer.get_priority();
-        this->priority_set.insert(pri);
-        this->pri_packerlist_map[pri].push_back(packer);
+        this->co_map.insert({id, packer});
+        this->id_set.insert(id);
+        this->pri_map[priority].insert(id);
+        return id;
     }
 
     void step(){
-        for(auto pri_it = this->priority_set.rbegin(); pri_it!=this->priority_set.rend(); pri_it++){
-            auto end_it = get_next_iterator(pri_it);
-            for(auto iter_it = this->priority_set.rbegin(); iter_it!=end_it; iter_it++){
-                if(!this->pri_packerlist_map.contains(*iter_it)){
-                    break;
-                }
-                auto& current_packerlist =  this->pri_packerlist_map[*iter_it];
-                for(auto packerlist_it = current_packerlist.begin(); packerlist_it!=current_packerlist.end(); packerlist_it++){
-                    if(*packerlist_it){
-                        (*packerlist_it)();
-                    }
-                    else{
-                        packerlist_it = current_packerlist.erase(packerlist_it);
-                    }
-                }
-                if(current_packerlist.empty()){
-                    this->pri_packerlist_map.erase(*iter_it);
-                }
+        std::unique_lock lock_co_map(this->co_map_mutex);
+        co_id_t co_id = NOP_ID;
+        {
+            std::scoped_lock lk(this->running_mutex, this->id_set_mutex, this->pri_map_mutex);
+            if(this->id_set.empty()) return ;
+            next_co_packer();
+            if(next_co_packer.value_ready()){
+                auto [id] = next_co_packer.get_promise_value();
+                co_id = id;
+            }
+            else{
+                return;
             }
         }
-        this->clean_pri_set();
+        if(!this->co_map.contains(co_id)) return;
+        auto &co = this->co_map[co_id];
+        lock_co_map.unlock();
+        co();
     }
 
     void continuous(){
-        while(!this->priority_set.empty()){
+        while(!this->id_set.empty()){
             this->step();
         }
     }
 
     auto get_running_id_vector(){
-        std::vector<co_id_t> id_list;
-        for(auto pri: this->priority_set){
-            auto& packer_list = this->pri_packerlist_map[pri];
-            for(auto &it: packer_list){
-                id_list.push_back(it.get_id());
-            }
+        std::lock_guard lk(this->id_set_mutex);
+        std::vector<co_id_t> vec;
+        for(auto id: this->id_set){
+            vec.push_back(id);
         }
-        return id_list;
+        return vec;
+    }
+
+    bool empty(){
+        return this->id_set.empty();
     }
 
     ~Scheduler(){
     }
 
     private:
-
-    void clean_pri_set(){
-        std::set<priority_t> tmp_set;
-        for(auto it: this->priority_set){
-            if(!this->pri_packerlist_map.contains(it)){
-                tmp_set.insert(it);
+    coroutine_states<co_id_t> coroutine_next_co(){
+        while(!intterput){
+            for(auto pri_map_it = this->pri_map.begin(); pri_map_it!=this->pri_map.end(); pri_map_it++){
+                auto end_it = get_next_iterator(pri_map_it);
+                for(auto it = this->pri_map.begin(); it!=end_it; it++){
+                    auto& maped_id_set = it->second;
+                    for(auto maped_set_it = maped_id_set.begin(); maped_set_it!=maped_id_set.end(); maped_set_it++){
+                        auto id = *maped_set_it;
+                        co_yield id;
+                        auto &co = this->co_map[id];
+                        if(!co){
+                            this->id_set.erase(id);
+                            maped_set_it = maped_id_set.erase(maped_set_it);
+                            if(maped_set_it == maped_id_set.end()) break;
+                        }
+                    }
+                    if(maped_id_set.empty()){
+                        if(pri_map_it==it){
+                            it = this->pri_map.erase(it);
+                            pri_map_it = it;
+                        }
+                        else{
+                            it = this->pri_map.erase(it);
+                        }
+                    }
+                    if(it==this->pri_map.end()) break;
+                }
+                if(pri_map_it==this->pri_map.end()) break;
             }
-        }
-        for(auto it: tmp_set){
-            this->priority_set.erase(it);
+            co_await awaiter_stop{};
         }
     }
+
     private:
-    std::map<co_id_t,  typename packer_list_t::iterator > co_map;
-    std::map<priority_t, packer_list_t> pri_packerlist_map;
-    std::set<priority_t> priority_set;
+    std::set<co_id_t> id_set;
+    std::mutex id_set_mutex;
+
+    std::unordered_map<co_id_t, packer_type> co_map;
+    std::mutex co_map_mutex;
+
+    std::map<priority_t, std::set<co_id_t>, std::greater<co_id_t>> pri_map;
+    std::mutex pri_map_mutex;
+
+    std::mutex running_mutex;
+    std::atomic_bool intterput;
+    std::atomic_bool teiminate;
+
+    coroutine_states<co_id_t> next_co_packer;
 };
