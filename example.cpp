@@ -1,6 +1,6 @@
 #include"./include/Scheduler.hpp"
 #include "./include/coroutine_base.hpp"
-#include "assistance.hpp"
+#include "./include/assistance.hpp"
 #include <string>
 #include <thread>
 
@@ -33,7 +33,7 @@ coroutine_states<void> func3(std::string num){
         // std::cout<<num<<':'<<__FUNCTION__<<" now value:"<<i<<std::endl;
         co_await awaiter_stop{};
     }
-    std::cout<<"total num:"<<i<<std::endl;
+    std::cout<<"thread:"<<std::this_thread::get_id()<<' '<<num<<' '<<__FUNCTION__<<" now value:"<<i<<std::endl;
 }
 
 int main(){
@@ -55,14 +55,17 @@ int main(){
         std::thread tt(f);
         std::thread yy(f);
         sche.push_coroutine(func("co4"));
-        sche.push_coroutine(coroutine_packer(func("co3"), HIGHEST_LEVEL));
+        sche.push_coroutine(coroutine_packer(func("co5"), HIGHEST_LEVEL));
         t.join();
         y.join();
         tt.join();
         yy.join();
     }
     
-    Scheduler<> sche2(func3("sche"), func3("sche2"), func3("sche3"));
+    std::cout<<"############################################# Scheduler_"<<num++<<" #############################################\n"<<std::endl;
+
+    std::cout<<"############################################# Scheduler_"<<num<<" #############################################"<<std::endl;
+    Scheduler<> sche2(func3("sche"), func3("sche2"), func3("sche3"), func3("sche4"));
     {
         auto f = [&sche2](){
             sche2.continuous();
@@ -76,10 +79,6 @@ int main(){
         tt.join();
         yy.join();
     }
-    std::cout<<"############################################# Scheduler_"<<num++<<" #############################################\n"<<std::endl;
-
-    std::cout<<"############################################# Scheduler_"<<num<<" #############################################"<<std::endl;
-    
     std::cout<<"############################################# Scheduler_"<<num++<<" #############################################\n"<<std::endl;
 
     std::cout<<"-----------------------------------------------end of all-----------------------------------------------"<<std::endl;
