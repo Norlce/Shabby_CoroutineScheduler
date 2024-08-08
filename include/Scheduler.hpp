@@ -1,5 +1,4 @@
 #pragma once
-#include <corecrt.h>
 #include <functional>
 #include <iterator>
 #include<list>
@@ -147,9 +146,9 @@ class Scheduler<CoroutineType>
         while(!teiminate){
             for(auto pri_map_it = this->pri_map.begin(); pri_map_it!=this->pri_map.end(); pri_map_it++){
                 auto end_it = get_next_iterator(pri_map_it);
-                for(auto it = this->pri_map.begin(); it!=end_it; it++){
+                for(auto it = this->pri_map.begin(); it!=end_it&&it!=pri_map.end(); it++){
                     auto& maped_id_set = it->second;
-                    for(auto maped_set_it = maped_id_set.begin(); maped_set_it!=maped_id_set.end(); maped_set_it++){
+                    for(auto maped_set_it = it->second.begin(); maped_set_it!=it->second.end(); maped_set_it++){
                         auto id = *maped_set_it;
                         co_yield id;
                         if(!this->co_map.contains(id))  break;
@@ -284,7 +283,7 @@ class Scheduler<coroutine_states<void>>
         while(!intterput){
             for(auto pri_map_it = this->pri_map.begin(); pri_map_it!=this->pri_map.end(); pri_map_it++){
                 auto end_it = get_next_iterator(pri_map_it);
-                for(auto it = this->pri_map.begin(); it!=end_it; it++){
+                for(auto it = this->pri_map.begin(); it!=end_it&&it!=this->pri_map.end(); it++){
                     auto& maped_id_set = it->second;
                     for(auto maped_set_it = maped_id_set.begin(); maped_set_it!=maped_id_set.end(); maped_set_it++){
                         auto id = *maped_set_it;
