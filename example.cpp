@@ -62,20 +62,20 @@ int main(){
         yy.join();
     }
     
-    // Scheduler<> sche2(func3("sche"), func3("sche2"), func3("sche3"));
-    // {
-    //     auto f = [&sche2](){
-    //         sche2.continuous();
-    //     };
-    //     std::thread t(f);
-    //     std::thread y(f);
-    //     std::thread tt(f);
-    //     std::thread yy(f);
-    //     t.join();
-    //     y.join();
-    //     tt.join();
-    //     yy.join();
-    // }
+    Scheduler<> sche2(func3("sche"), func3("sche2"), func3("sche3"));
+    {
+        auto f = [&sche2](){
+            sche2.continuous();
+        };
+        std::thread t(f);
+        std::thread y(f);
+        std::thread tt(f);
+        std::thread yy(f);
+        t.join();
+        y.join();
+        tt.join();
+        yy.join();
+    }
     std::cout<<"############################################# Scheduler_"<<num++<<" #############################################\n"<<std::endl;
 
     std::cout<<"############################################# Scheduler_"<<num<<" #############################################"<<std::endl;
