@@ -17,8 +17,8 @@ struct slime_type{
 };
 
 template<typename T>
-T get_next_iterator(T& it){
-    auto temp = it;
+auto get_next_iterator(T& it){
+    T temp = it;
     temp++;
     return temp;
 }
