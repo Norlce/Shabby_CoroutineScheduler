@@ -1,8 +1,8 @@
 #include"./include/Scheduler.hpp"
-#include "./include/coroutine_base.hpp"
-#include "./include/assistance.hpp"
+#include <chrono>
 #include <string>
 #include <thread>
+#include<iostream>
 
 coroutine_states<std::string, int,std::string> func(std::string coro_num){
     auto p = current_corotine_id();
@@ -40,13 +40,18 @@ int main(){
     using type = decltype(func("co"));
     auto num = 1;
     std::cout<<"############################################# Scheduler_"<<num<<" #############################################"<<std::endl;
-    Scheduler<type> sche(
-        func("co"), 
-        coroutine_packer(func("co2"), 3),
-        coroutine_packer(func("co3"), 1)
-        );
-
     {
+        Scheduler<type> sche(
+            func("co"), 
+            coroutine_packer(func("co2"), 3),
+            coroutine_packer(func("co3"), 1)
+            );
+        auto running_id = sche.get_running_id_vector();
+        std::cout<<"running_id:";
+        for(auto id:running_id){
+            std::cout<<id<<' ';
+        }
+        std::cout<<std::endl;
         auto f = [&sche](){
             sche.continuous();
         };
@@ -56,10 +61,20 @@ int main(){
         std::thread yy(f);
         sche.push_coroutine(func("co4"));
         sche.push_coroutine(coroutine_packer(func("co5"), HIGHEST_LEVEL));
+        for(auto &id:running_id){
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            std::cout<<id<<std::endl;
+            auto values = sche.get_value_list(id);
+            // for(auto [co, i, num]:values){
+            //     std::cout<<co<<' '<<i<<' '<<num<<std::endl;
+            // }
+            std::cout<<"values.size():"<<values.size()<<std::endl;
+        }
         t.join();
         y.join();
         tt.join();
         yy.join();
+        
     }
     
     std::cout<<"############################################# Scheduler_"<<num++<<" #############################################\n"<<std::endl;
