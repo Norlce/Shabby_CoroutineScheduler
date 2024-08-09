@@ -1,6 +1,5 @@
 #pragma once
 #include <functional>
-#include <iterator>
 #include<list>
 #include<map>
 #include <thread>
@@ -9,8 +8,6 @@
 #include<set>
 #include<atomic>
 #include<mutex>
-#include <algorithm>
-#include "assistance.hpp"
 #include "awaiters.hpp"
 #include "coroutine_base.hpp"
 #include "concepts.hpp"
@@ -71,7 +68,6 @@ class Scheduler<CoroutineType>
         this->co_map.insert({id, packer});
         this->id_set.insert(id);
         this->pri_map[priority].insert(id);
-        std::cout<<id<<' '<<priority<<" has pushed in list"<<std::endl;
         return id;
     }
 
@@ -91,7 +87,7 @@ class Scheduler<CoroutineType>
             }
         }
         if(!this->co_map.contains(co_id)) return;
-        auto &co = this->co_map[co_id];
+        auto co = this->co_map[co_id];
         lock_co_map.unlock();
         co();
     }
@@ -251,7 +247,7 @@ class Scheduler<coroutine_states<void>>
             }
         }
         if(!this->co_map.contains(co_id)) return;
-        auto &co = this->co_map[co_id];
+        auto co = this->co_map[co_id];
         lock_co_map.unlock();
         co();
     }
@@ -279,6 +275,16 @@ class Scheduler<coroutine_states<void>>
     }
 
     private:
+
+    void check_and_clear(){
+        std::scoped_lock lk(this->co_map_mutex,this->finished_id_set_mutex);
+        if(finished_id_set.empty()) return;
+        for(auto& finish_id:this->finished_id_set){
+            this->co_map.erase(finish_id);
+        }
+        this->finished_id_set.clear();
+    }
+
     coroutine_states<co_id_t> coroutine_next_co(){
         while(!intterput){
             for(auto pri_map_it = this->pri_map.begin(); pri_map_it!=this->pri_map.end(); pri_map_it++){
@@ -288,11 +294,12 @@ class Scheduler<coroutine_states<void>>
                     for(auto maped_set_it = maped_id_set.begin(); maped_set_it!=maped_id_set.end(); maped_set_it++){
                         auto id = *maped_set_it;
                         co_yield id;
-                        if(!this->co_map.contains(id)) break;
                         auto &co = this->co_map[id];
                         if(!co){
                             this->id_set.erase(id);
                             maped_set_it = maped_id_set.erase(maped_set_it);
+                            this->finished_id_set.insert(id);
+                            this->co_map.erase(id);
                             if(maped_set_it == maped_id_set.end()) break;
                         }
                     }
@@ -309,13 +316,16 @@ class Scheduler<coroutine_states<void>>
                 }
                 if(pri_map_it==this->pri_map.end()) break;
             }
-            co_await awaiter_stop{};
+            co_await awaiter_no_value_ready{};
         }
     }
 
     private:
     std::set<co_id_t> id_set;
     std::mutex id_set_mutex;
+
+    std::set<co_id_t> finished_id_set;
+    std::mutex finished_id_set_mutex;
 
     std::unordered_map<co_id_t, packer_type> co_map;
     std::mutex co_map_mutex;
