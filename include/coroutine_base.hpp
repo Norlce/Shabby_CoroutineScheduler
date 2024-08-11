@@ -329,7 +329,6 @@ class coroutine_packer{
     priority(co.priority),
     running_mutex(co.running_mutex),
     result_list_mutex(co.result_list_mutex){
-        this->check_and_push_result();
     }
     coroutine_packer(const coroutine_packer& co):
     co_state_ptr(co.co_state_ptr),
@@ -337,7 +336,6 @@ class coroutine_packer{
     priority(co.priority),
     running_mutex(co.running_mutex),
     result_list_mutex(co.result_list_mutex){
-        this->check_and_push_result();
     }
 
     void operator=(coroutine_packer&& co){
