@@ -9,6 +9,7 @@
 #include"awaiters.hpp"
 #include <iostream>
 #include <thread>
+#include <type_traits>
 
 struct promise_type;
 
@@ -397,7 +398,7 @@ class coroutine_packer{
     }
 
     private:
-     void check_and_push_result(){
+    void check_and_push_result(){
         if(this->co_state_ptr->value_ready()){
             this->result_list->push_back(this->co_state_ptr->get_promise_value());
         }
@@ -412,8 +413,6 @@ class coroutine_packer{
     std::shared_ptr<std::mutex> running_mutex;
     std::shared_ptr<std::mutex> result_list_mutex;
 };
-
-using void_co_t = coroutine_states<void>;
 
 template<>
 class coroutine_packer<coroutine_states<void>>{
@@ -497,3 +496,19 @@ class coroutine_packer<coroutine_states<void>>{
     priority_t priority;
     std::shared_ptr<std::mutex> running_mutex;
 };
+
+template <typename ...T>
+coroutine_states(T&&...)->coroutine_states<std::decay_t<T>...>;
+
+template <typename CoroutineType>
+coroutine_packer(CoroutineType&&)->coroutine_packer<std::decay_t<CoroutineType>>;
+
+template <typename ...T>
+using coro = coroutine_states<T...>;
+
+using coro_void = coroutine_states<void>;
+
+template <typename CoroutineType>
+using copack = coroutine_packer<CoroutineType>;
+
+using copack_void = coroutine_packer<coro<void>>;
