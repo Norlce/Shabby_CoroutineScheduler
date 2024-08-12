@@ -13,7 +13,7 @@
 #include "coroutine_base.hpp"
 #include "concepts.hpp"
 
-template<typename CoroutineType = coroutine_states<void>>
+template<typename CoroutineType = coro<void>>
 requires Concept_CorotineType<CoroutineType>
 class Scheduler_base{
     public:
@@ -26,7 +26,8 @@ class Scheduler_base{
     intterput_(false),
     terminate_(false),
     automatic_(false),
-    max_thread(0)
+    max_thread_(0),
+    thread_num_(0)
     {}
 
     template<typename ...T>
@@ -34,18 +35,9 @@ class Scheduler_base{
     intterput_(false),
     terminate_(false),
     automatic_(false),
-    max_thread(0){
+    max_thread_(0),
+    thread_num_(0){
         (this->push_coroutine(packer_type(std::forward<T>(t))),...);
-    }
-
-    virtual co_id_t push_coroutine(packer_type packer){
-        std::scoped_lock lk(this->co_map_mutex, this->id_set_mutex, this->pri_map_mutex);
-        auto priority = packer.get_priority();
-        auto id = packer.get_id();
-        this->co_map.insert({id, packer});
-        this->id_set.insert(id);
-        this->pri_map[priority].insert(id);
-        return id;
     }
 
     virtual void step() = 0;
@@ -61,7 +53,7 @@ class Scheduler_base{
         this->terminate_ = val;
     }
     virtual void set_max_threads(std::size_t max_thr){
-        this->max_thread = max_thr;
+        this->max_thread_ = max_thr;
     }
     virtual std::vector<co_id_t> get_running_id_vector(){
         std::lock_guard lk(this->id_set_mutex);
@@ -70,6 +62,9 @@ class Scheduler_base{
             vec.push_back(id);
         }
         return vec;
+    }
+    virtual std::size_t thread_num(){
+        return this->thread_num_;
     }
 
     virtual bool empty(){
@@ -82,7 +77,17 @@ class Scheduler_base{
     virtual ~Scheduler_base(){}
 
     protected:
-    virtual coroutine_states<co_id_t> coroutine_next_co(){
+    virtual co_id_t push_coroutine(packer_type packer){
+        std::scoped_lock lk(this->co_map_mutex, this->id_set_mutex, this->pri_map_mutex);
+        auto priority = packer.get_priority();
+        auto id = packer.get_id();
+        this->co_map.insert({id, packer});
+        this->id_set.insert(id);
+        this->pri_map[priority].insert(id);
+        return id;
+    }
+
+    virtual coro<co_id_t> coroutine_next_co(){
         while(!this->terminate_){
             for(auto pri_map_it = this->pri_map.begin(); pri_map_it!=this->pri_map.end(); pri_map_it++){
                 auto end_it = get_next_iterator(pri_map_it);
@@ -132,10 +137,11 @@ class Scheduler_base{
     std::atomic_bool terminate_;
     std::atomic_bool automatic_;
 
-    std::atomic<std::size_t> max_thread;
+    std::atomic<std::size_t> max_thread_;
+    std::atomic<std::size_t> thread_num_;
 };
 
-template<typename CoroutineType = coroutine_states<void>>
+template<typename CoroutineType = coro<void>>
 class Scheduler;
 
 /*
@@ -202,7 +208,7 @@ class Scheduler<CoroutineType>:public Scheduler_base<CoroutineType>
     }
 
     void continuous(){
-        while(!this->id_set.empty()){
+        while(!this->id_set.empty()&&!this->terminate_){
             this->step();
         }
     }
@@ -234,7 +240,7 @@ class Scheduler<CoroutineType>:public Scheduler_base<CoroutineType>
     }
 
     protected:
-    coroutine_states<co_id_t> coroutine_next_co(){
+    coro<co_id_t> coroutine_next_co(){
         while(!this->terminate_){
             for(auto pri_map_it = this->pri_map.begin(); pri_map_it!=this->pri_map.end(); pri_map_it++){
                 auto end_it = get_next_iterator(pri_map_it);
@@ -273,17 +279,14 @@ class Scheduler<CoroutineType>:public Scheduler_base<CoroutineType>
     std::set<co_id_t> finished_id_set;
     std::mutex finished_id_set_mutex;
 
-    coroutine_states<co_id_t> next_co_packer;
+    coro<co_id_t> next_co_packer;
 };
 
-template<typename ...T>
-Scheduler(T&&...)->Scheduler<std::decay_t<T>...>;
-
 template<>
-class Scheduler<coroutine_states<void>>:public Scheduler_base<coroutine_states<void>>
+class Scheduler<coro<void>>:public Scheduler_base<coro<void>>
 {   
     public:
-    using CoroutineType = coroutine_states<void>;
+    using CoroutineType = coro<void>;
     using value_type = CoroutineType::value_type;
     using packer_type = typename CoroutineType::packer_type;
     using value_list_t = std::list<value_type>;
@@ -296,7 +299,7 @@ class Scheduler<coroutine_states<void>>:public Scheduler_base<coroutine_states<v
     template<typename ...T>
     requires Concept_CoroutinePackerType_or_CorotineTypes<T...>
     Scheduler(T&&... t):
-    Scheduler_base<coroutine_states<void>>(std::forward<T>(t)...),
+    Scheduler_base<coro<void>>(std::forward<T>(t)...),
     next_co_packer(this->coroutine_next_co()){}
 
     public:
@@ -330,5 +333,11 @@ class Scheduler<coroutine_states<void>>:public Scheduler_base<coroutine_states<v
     }
 
     private:
-    coroutine_states<co_id_t> next_co_packer;
+    coro<co_id_t> next_co_packer;
 };
+
+template<typename ...T>
+Scheduler(T&&...)->Scheduler<std::decay_t<T>...>;
+
+template<typename ...T>
+Scheduler_base(T&&...)->Scheduler_base<std::decay_t<T>...>;
