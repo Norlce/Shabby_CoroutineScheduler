@@ -66,7 +66,7 @@ struct handle_packer{
 };
 
 template<typename CoroutineType = coroutine_states<void>>
-class coroutine_packer;
+class copacker;
 
 template<typename ...T>
 class coroutine_states{
@@ -74,7 +74,7 @@ class coroutine_states{
     using co_packer_com_type = void;
     struct promise_type;
     using value_type = std::tuple<T...>;
-    using packer_type = coroutine_packer<coroutine_states<T...>>;
+    using packer_type = copacker<coroutine_states<T...>>;
 
     public:
     struct promise_type{
@@ -191,7 +191,7 @@ class coroutine_states<void>{
     using co_packer_com_type = void;
     struct promise_type;
     using value_type = void;
-    using packer_type = coroutine_packer<coroutine_states<void>>;
+    using packer_type = copacker<coroutine_states<void>>;
 
     public:
     struct promise_type{
@@ -297,7 +297,7 @@ class coroutine_states<void>{
 };
 
 template<typename CoroutineType>
-class coroutine_packer{
+class copacker{
     public:
     using co_packer_com_type = void;
     using value_type = typename CoroutineType::value_type;
@@ -305,9 +305,9 @@ class coroutine_packer{
     using co_base_handle_t = typename CoroutineType::handle_type;
     using value_list_t = std::list<value_type>;
 
-    coroutine_packer():co_state_ptr(nullptr){}
+    copacker():co_state_ptr(nullptr){}
 
-    coroutine_packer(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
+    copacker(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new CoroutineType(std::forward<co_base_t>(coro_base))),
     result_list(new value_list_t),
     priority(pri),
@@ -315,7 +315,7 @@ class coroutine_packer{
     result_list_mutex(new std::mutex){
         // this->check_and_push_result();
     }
-    coroutine_packer(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
+    copacker(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new CoroutineType(coro_base)),
     result_list(new value_list_t),
     priority(pri),
@@ -324,14 +324,14 @@ class coroutine_packer{
         // this->check_and_push_result();
     }
 
-    coroutine_packer(coroutine_packer&& co):
+    copacker(copacker&& co):
     co_state_ptr(co.co_state_ptr),
     result_list(co.result_list),
     priority(co.priority),
     running_mutex(co.running_mutex),
     result_list_mutex(co.result_list_mutex){
     }
-    coroutine_packer(const coroutine_packer& co):
+    copacker(const copacker& co):
     co_state_ptr(co.co_state_ptr),
     result_list(co.result_list),
     priority(co.priority),
@@ -339,14 +339,14 @@ class coroutine_packer{
     result_list_mutex(co.result_list_mutex){
     }
 
-    void operator=(coroutine_packer&& co){
+    void operator=(copacker&& co){
         this->co_state_ptr = co.co_state_ptr;
         this->result_list = co.result_list;
         this->priority = co.priority;
         this->running_mutex = co.running_mutex;
         this->result_list_mutex = co.result_list_mutex;
     }
-    void operator=(const coroutine_packer& co){
+    void operator=(const copacker& co){
         this->co_state_ptr = co.co_state_ptr;
         this->result_list = co.result_list;
         this->priority = co.priority;
@@ -354,7 +354,7 @@ class coroutine_packer{
         this->result_list_mutex = co.result_list_mutex;
     }
 
-    bool operator==(const coroutine_packer& co){
+    bool operator==(const copacker& co){
         return this->co_state_ptr.get() == co.co_state_ptr.get();
     }
 
@@ -394,7 +394,7 @@ class coroutine_packer{
         return list;
     }
 
-    virtual ~coroutine_packer(){
+    virtual ~copacker(){
     }
 
     private:
@@ -415,51 +415,51 @@ class coroutine_packer{
 };
 
 template<>
-class coroutine_packer<coroutine_states<void>>{
+class copacker<coroutine_states<void>>{
     public:
     using co_packer_com_type = void;
     using co_base_t = coroutine_states<void>;
     using co_base_handle_t = typename coroutine_states<void>::handle_type;
 
-    coroutine_packer():
+    copacker():
     co_state_ptr(nullptr),
     priority(LOWEST_LEVEL),
     running_mutex(new std::mutex){}
 
-    coroutine_packer(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
+    copacker(co_base_t&& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new coroutine_states<void>(std::forward<co_base_t>(coro_base))),
     priority(pri),
     running_mutex(new std::mutex)
     {}
-    coroutine_packer(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
+    copacker(const co_base_t& coro_base, priority_t pri = LOWEST_LEVEL):
     co_state_ptr(new coroutine_states<void>(coro_base)),
     priority(pri),
     running_mutex(new std::mutex)
     {}
 
-    coroutine_packer(coroutine_packer&& co):
+    copacker(copacker&& co):
     co_state_ptr(co.co_state_ptr),
     priority(co.priority),
     running_mutex(co.running_mutex)
     {}
-    coroutine_packer(const coroutine_packer& co):
+    copacker(const copacker& co):
     co_state_ptr(co.co_state_ptr),
     priority(co.priority),
     running_mutex(co.running_mutex)
     {}
 
-    void operator=(coroutine_packer&& co){
+    void operator=(copacker&& co){
         this->co_state_ptr = co.co_state_ptr;
         this->priority = co.priority;
         this->running_mutex = co.running_mutex;
     }
-    void operator=(const coroutine_packer& co){
+    void operator=(const copacker& co){
         this->co_state_ptr = co.co_state_ptr;
         this->priority = co.priority;
         this->running_mutex = co.running_mutex;
     }
 
-    bool operator==(const coroutine_packer& co){
+    bool operator==(const copacker& co){
        return this->co_state_ptr.get() == co.co_state_ptr.get();
     }
 
@@ -489,7 +489,7 @@ class coroutine_packer<coroutine_states<void>>{
         return this->priority;
     }
 
-    virtual ~coroutine_packer(){
+    virtual ~copacker(){
     }
     private:
     std::shared_ptr<coroutine_states<void>> co_state_ptr;
@@ -498,17 +498,14 @@ class coroutine_packer<coroutine_states<void>>{
 };
 
 template <typename ...T>
-coroutine_states(T&&...)->coroutine_states<std::decay_t<T>...>;
+coroutine_states()->coroutine_states<std::decay_t<T>...>;
 
 template <typename CoroutineType>
-coroutine_packer(CoroutineType&&)->coroutine_packer<std::decay_t<CoroutineType>>;
+copacker(CoroutineType&&)->copacker<std::decay_t<CoroutineType>>;
 
 template <typename ...T>
 using coro = coroutine_states<T...>;
 
-using coro_void = coroutine_states<void>;
+using coro_void = coro<void>;
 
-template <typename CoroutineType>
-using copack = coroutine_packer<CoroutineType>;
-
-using copack_void = coroutine_packer<coro<void>>;
+using copacker_void = copacker<coro<void>>;
