@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include <functional>
 #include<list>
 #include<map>
@@ -13,6 +14,28 @@
 #include "coroutine_base.hpp"
 #include "concepts.hpp"
 
+
+/*
+________________________________________________________________________________________________________________________________________________________________________________
+#finish_set:
+[finished_id]->[finished_id]->[finished_id]->[finished_id]->[finished_id]
+###
+
+#co_id_set:
+[coroutine_id]->[coroutine_id]->[coroutine_id]->[coroutine_id]->[coroutine_id]
+###
+
+#co_set:
+[coroutine]->[coroutine]->[coroutine]->[coroutine]->[coroutine]
+###
+
+#pri_map:
+[priority]      [priority]      [priority]
+    |                |              |
+ [co_list]       [co_list]       [co_list]
+ ###
+________________________________________________________________________________________________________________________________________________________________________________
+*/
 template<typename CoroutineType = coro<void>>
 requires Concept_CorotineType<CoroutineType>
 class Scheduler_base{
@@ -40,14 +63,45 @@ class Scheduler_base{
         (this->push_coroutine(packer_type(std::forward<T>(t))),...);
     }
 
+    public:
     virtual void step() = 0;
-    virtual void continuous() = 0;
+    virtual void continuous(){
+        while(!this->id_set.empty()&&!this->terminate_){
+            while(this->intterput_){
+                std::this_thread::yield();
+            }
+            this->step();
+        }
+    }
 
+    virtual co_id_t add_co(packer_type packer){
+        auto id = this->push_coroutine(packer);
+        if(this->automatic_){
+            this->start();
+        }
+        return id;
+    }
+    virtual void start(){
+        auto mission = [&](){
+            this->continuous();
+            std::unique_lock lk(this->thread_num_mutex);
+            this->thread_num_--;
+        };
+        std::unique_lock lk(this->thread_num_mutex);
+        if(this->thread_num_.load()<this->max_thread_.load()){
+            auto sub_num = this->max_thread_.load() - this->thread_num_.load();
+            this->thread_num_+=sub_num;
+            for(auto i = 0; i< sub_num; i++){
+                std::thread t(mission);
+                t.detach();
+            }
+        }
+    }
     virtual void automatic(bool val = true){
         this->automatic_ = val;
     }
     virtual void intterput(bool val = true){
-        this->intterput_ = val;
+        this->intterput_.store(val, std::memory_order_release);
     }
     virtual void terminate(bool val = true){
         this->terminate_ = val;
@@ -66,15 +120,14 @@ class Scheduler_base{
     virtual std::size_t thread_num(){
         return this->thread_num_;
     }
-
     virtual bool empty(){
         return this->id_set.empty();
     }
-
     virtual std::size_t coroutine_num(){
         return this->co_map.size();
     }
-    virtual ~Scheduler_base(){}
+    virtual ~Scheduler_base(){
+    }
 
     protected:
     virtual co_id_t push_coroutine(packer_type packer){
@@ -139,32 +192,12 @@ class Scheduler_base{
 
     std::atomic<std::size_t> max_thread_;
     std::atomic<std::size_t> thread_num_;
+    std::mutex thread_num_mutex;
 };
 
 template<typename CoroutineType = coro<void>>
 class Scheduler;
 
-/*
-________________________________________________________________________________________________________________________________________________________________________________
-#finish_set:
-[finished_id]->[finished_id]->[finished_id]->[finished_id]->[finished_id]
-###
-
-#co_id_set:
-[coroutine_id]->[coroutine_id]->[coroutine_id]->[coroutine_id]->[coroutine_id]
-###
-
-#co_set:
-[coroutine]->[coroutine]->[coroutine]->[coroutine]->[coroutine]
-###
-
-#pri_map:
-[priority]      [priority]      [priority]
-    |                |              |
- [co_list]       [co_list]       [co_list]
- ###
-________________________________________________________________________________________________________________________________________________________________________________
-*/
 template<typename CoroutineType>
 requires Concept_CorotineType<CoroutineType>
 class Scheduler<CoroutineType>:public Scheduler_base<CoroutineType>
@@ -207,12 +240,6 @@ class Scheduler<CoroutineType>:public Scheduler_base<CoroutineType>
         co();
     }
 
-    void continuous(){
-        while(!this->id_set.empty()&&!this->terminate_){
-            this->step();
-        }
-    }
-
     value_list_t get_value_list(co_id_t co_id){
         std::scoped_lock lk(this->co_map_mutex, this->finished_id_set_mutex);
         if(!this->co_map.contains(co_id)){
@@ -237,6 +264,9 @@ class Scheduler<CoroutineType>:public Scheduler_base<CoroutineType>
     }
 
     ~Scheduler(){
+        while(this->thread_num_.load(std::memory_order_acquire)>0){
+            std::this_thread::yield();
+        }
     }
 
     protected:
@@ -324,12 +354,10 @@ class Scheduler<coro<void>>:public Scheduler_base<coro<void>>
         co();
     }
 
-    void continuous(){
-        while(!this->id_set.empty()){
-            this->step();
-        }
-    }
     ~Scheduler(){
+        while(this->thread_num_.load(std::memory_order_acquire)>0){
+            std::this_thread::yield();
+        }
     }
 
     private:
