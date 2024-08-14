@@ -11,6 +11,8 @@
 #include <thread>
 #include <type_traits>
 
+namespace  shabysch{
+
 struct promise_type;
 
 template<typename ...T>
@@ -509,3 +511,5 @@ using coro = coroutine_states<T...>;
 using coro_void = coro<void>;
 
 using copacker_void = copacker<coro<void>>;
+
+}

@@ -1,6 +1,8 @@
 #pragma once
 #include <coroutine>
 
+namespace  shabysch{
+
 using co_id_t = std::size_t;
 constexpr co_id_t NOP_ID = 0;
 
@@ -37,4 +39,5 @@ struct awaiter_assister{
     }
 };
 
-#define current_corotine_id()  co_await awaiter_assister{};
+}
+#define current_corotine_id()  co_await shabysch::awaiter_assister{};

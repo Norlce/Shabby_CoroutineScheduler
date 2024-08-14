@@ -6,7 +6,7 @@
 #include <thread>
 #include<iostream>
 
-coro<std::string, int,std::string> func(std::string coro_num){
+shabysch::coro<std::string, int,std::string> func(std::string coro_num){
     auto p = current_corotine_id();
     std::cout<<coro_num<<':'<<"coro_handle: "<<p<<std::endl;
     int i = 0;
@@ -18,7 +18,7 @@ coro<std::string, int,std::string> func(std::string coro_num){
     std::cout<<coro_num<<" done"<<std::endl;
 }
 
-coro<std::string, int,std::string> func2(std::string num){
+shabysch::coro<std::string, int,std::string> func2(std::string num){
     auto p = current_corotine_id();
     std::cout<<num<<':'<<"coro_handle:"<<std::hex<<' '<<p<<std::endl;
     for(int i = 0; i<10; i++){
@@ -27,13 +27,13 @@ coro<std::string, int,std::string> func2(std::string num){
     }
 }
 
-coro<void> func3(std::string num){
+shabysch::coro<void> func3(std::string num){
     auto p = current_corotine_id();
     std::cout<<num<<':'<<"coro_handle: "<<p<<std::endl;
     int i = 0;
     for(; i<1000000; i++){
         // std::cout<<num<<':'<<__FUNCTION__<<" now value:"<<i<<std::endl;
-        co_await awaiter_stop{};
+        co_await shabysch::awaiter_stop{};
     }
     std::cout<<"thread:"<<std::this_thread::get_id()<<' '<<num<<' '<<__FUNCTION__<<" now value:"<<i<<std::endl;
 }
@@ -42,10 +42,10 @@ int main(){
     using type = decltype(func("co"));
     auto num = 1;
     std::cout<<"############################################# Scheduler_"<<num<<" #############################################"<<std::endl;
-        Scheduler<type> sche(
+        shabysch::Scheduler<type> sche(
             func("co"), 
-            copacker(func("co2"), 3),
-            copacker(func("co3"), 1)
+            shabysch::copacker(func("co2"), 3),
+            shabysch::copacker(func("co3"), 1)
             );
     {
         sche.automatic();
@@ -57,7 +57,7 @@ int main(){
         }
         std::cout<<std::endl;
         sche.add_co(func("co4"));
-        sche.add_co(copacker(func("co5"), HIGHEST_LEVEL));
+        sche.add_co(shabysch::copacker(func("co5"), shabysch::HIGHEST_LEVEL));
         auto finish_id = sche.get_finishied_id_vector();
         
         
@@ -77,10 +77,10 @@ int main(){
 
     std::cout<<"############################################# Scheduler_"<<num<<" #############################################"<<std::endl;
     sche.intterput();
-    Scheduler<> sche2(
+    shabysch::Scheduler<> sche2(
         func3("sche"),
         func3("sche2"), 
-        copacker(func3("sche3"), HIGHEST_LEVEL), 
+        shabysch::copacker(func3("sche3"), shabysch::HIGHEST_LEVEL), 
         func3("sche4"));
     {
         sche2.automatic();

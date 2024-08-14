@@ -1,6 +1,7 @@
 #pragma once
 #include<coroutine>
 
+namespace  shabysch{
 //Here are some corotine states, you can customize the status also
 
 struct awaiter_stop{
@@ -24,3 +25,5 @@ struct awaiter_run{
 };
 
 using awaiter_no_value_ready = awaiter_stop;
+
+}

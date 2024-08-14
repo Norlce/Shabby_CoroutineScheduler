@@ -1,6 +1,9 @@
 #pragma once
+#include <shared_mutex>
 #include <utility>
 #include <mutex>
+
+namespace  shabysch{
 
 template<typename ReturnType, typename ClassType, typename ...OtherType>
 constexpr auto get_member_function_addr(ReturnType( ClassType::* pointer)(OtherType...)){
@@ -16,8 +19,13 @@ template <typename ContainerType>
 struct lock_container{
     public:
     template<typename Func, typename ...ParamType>
-    auto complete_lock_call(Func f, ParamType&&... params){
-        std::lock_guard<std::mutex> lk(complete_mutex);
+    auto unique_lock_call(Func f, ParamType&&... params){
+        auto func_p = get_member_function_addr(f);
+        return func_p(&this->contain, std::forward<ParamType>(params)...);
+    }
+    template<typename Func, typename ...ParamType>
+    auto shared_lock_call(Func f, ParamType&&... params){
+        std::shared_lock<std::mutex> lk(complete_mutex);
         auto func_p = get_member_function_addr(f);
         return func_p(&this->contain, std::forward<ParamType>(params)...);
     }
@@ -25,3 +33,5 @@ struct lock_container{
     private:
     std::mutex complete_mutex;
 };
+
+}

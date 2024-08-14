@@ -1,5 +1,7 @@
 #pragma once
 
+namespace  shabysch{
+
 template<typename CoroutineType>
 concept Concept_CorotineType = requires(CoroutineType ct){
     typename CoroutineType::promise_type;
@@ -45,3 +47,5 @@ namespace scheduler_mode{
     struct FairScheduling{  FairScheduling(){} };
     struct PriorityScheduling{ PriorityScheduling(){} };
 };
+
+}

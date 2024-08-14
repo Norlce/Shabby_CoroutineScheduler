@@ -14,6 +14,7 @@
 #include "coroutine_base.hpp"
 #include "concepts.hpp"
 
+namespace  shabysch{
 
 /*
 ________________________________________________________________________________________________________________________________________________________________________________
@@ -73,7 +74,6 @@ class Scheduler_base{
             this->step();
         }
     }
-
     virtual co_id_t add_co(packer_type packer){
         auto id = this->push_coroutine(packer);
         if(this->automatic_){
@@ -158,13 +158,9 @@ class Scheduler_base{
                         }
                     }
                     if(maped_id_set.empty()){
-                        if(pri_map_it==it){
-                            it = this->pri_map.erase(it);
-                            pri_map_it = it;
-                        }
-                        else{
-                            it = this->pri_map.erase(it);
-                        }
+                        bool equ = (pri_map_it==it);
+                        it = this->pri_map.erase(it);
+                        if(equ) pri_map_it = it;
                     }
                     if(it==this->pri_map.end()) break;
                 }
@@ -289,13 +285,9 @@ class Scheduler<CoroutineType>:public Scheduler_base<CoroutineType>
                         }
                     }
                     if(maped_id_set.empty()){
-                        if(pri_map_it==it){
-                            it = this->pri_map.erase(it);
-                            pri_map_it = it;
-                        }
-                        else{
-                            it = this->pri_map.erase(it);
-                        }
+                        bool equ = (pri_map_it==it);
+                        it = this->pri_map.erase(it);
+                        if(equ) pri_map_it = it;
                     }
                     if(it==this->pri_map.end()) break;
                 }
@@ -369,3 +361,5 @@ Scheduler(T&&...)->Scheduler<std::decay_t<T>...>;
 
 template<typename ...T>
 Scheduler_base(T&&...)->Scheduler_base<std::decay_t<T>...>;
+
+}
