@@ -50,7 +50,7 @@ class Scheduler_base{
     intterput_(false),
     terminate_(false),
     automatic_(false),
-    max_thread_(0),
+    max_thread_(1),
     thread_num_(0)
     {}
 
@@ -59,7 +59,7 @@ class Scheduler_base{
     intterput_(false),
     terminate_(false),
     automatic_(false),
-    max_thread_(0),
+    max_thread_(1),
     thread_num_(0){
         (this->push_coroutine(packer_type(std::forward<T>(t))),...);
     }
@@ -107,7 +107,8 @@ class Scheduler_base{
         this->terminate_ = val;
     }
     virtual void set_max_threads(std::size_t max_thr){
-        this->max_thread_ = max_thr;
+        if(max_thr!=0)
+            this->max_thread_ = max_thr;
     }
     virtual std::vector<co_id_t> get_running_id_vector(){
         std::lock_guard lk(this->id_set_mutex);
