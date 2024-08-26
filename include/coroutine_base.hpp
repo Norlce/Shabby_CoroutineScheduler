@@ -105,8 +105,9 @@ class coroutine_states{
         awaiter_assister await_transform(awaiter_assister awaiter){
             return awaiter;
         }
-        void return_void(){
-
+        void return_value(value_type value){
+            this->result_ready = true;
+            this->result = value;
         }
         ~promise_type(){}
 
@@ -225,7 +226,7 @@ class coroutine_states<void>{
             return {};
         }
         void return_void(){
-
+            this->result_ready = false;
         }
         ~promise_type(){}
 
